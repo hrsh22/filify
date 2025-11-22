@@ -23,6 +23,13 @@ const OUTPUT_METADATA_FILENAME = '.output-dir';
 class BuildService {
     private readonly BUILD_ROOT = getBuildsRoot();
     private readonly activeProcesses = new Map<string, ChildProcess>();
+    private readonly ARTIFACT_TTL_MS = 24 * 60 * 60 * 1000;
+    private readonly CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
+    private cleanupTimer?: NodeJS.Timeout;
+
+    constructor() {
+        this.startCleanupTimer();
+    }
 
     async cloneAndBuild(
         repoUrl: string,
@@ -35,9 +42,20 @@ class BuildService {
         const { buildCommand, outputDir, reuseDir, reuseLabel } = options;
         let logs = '';
 
+        logger.info('Starting clone and build process', {
+            deploymentId,
+            repoUrl,
+            branch,
+            buildDir,
+            reuseDir: reuseDir ? 'yes' : 'no',
+            buildCommand: buildCommand || 'default',
+            outputDir: outputDir || 'auto-detect',
+        });
+
         try {
             // Ensure build root exists
             await fs.mkdir(this.BUILD_ROOT, { recursive: true });
+            logger.debug('Build root directory ensured', { buildRoot: this.BUILD_ROOT });
 
             if (reuseDir) {
                 logs += `Reusing previous workspace${reuseLabel ? ` from deployment ${reuseLabel}` : ''}\n`;
@@ -47,15 +65,24 @@ class BuildService {
                 logs += `✓ Copied previous workspace\n\n`;
             } else {
                 // Decrypt GitHub token
+                logger.debug('Decrypting GitHub token for clone', { deploymentId });
                 const token = encryptionService.decrypt(encryptedToken);
 
                 // Clone repository with authentication
                 logs += `Cloning repository: ${repoUrl} (branch: ${branch})\n`;
                 const authUrl = repoUrl.replace('https://', `https://${token}@`);
 
+                logger.info('Cloning repository', {
+                    deploymentId,
+                    repoUrl,
+                    branch,
+                    buildDir,
+                });
+
                 await fs.rm(buildDir, { recursive: true, force: true }).catch(() => undefined);
                 await this.runCommand(`git clone --single-branch --branch ${branch} ${authUrl} ${buildDir}`, deploymentId);
                 logs += `✓ Repository cloned successfully\n\n`;
+                logger.info('Repository cloned successfully', { deploymentId, buildDir });
             }
 
             // Determine project type
@@ -77,12 +104,14 @@ class BuildService {
                 const packageName = typeof packageJson.name === 'string' ? packageJson.name : 'app';
                 logs += `✓ Found package.json: ${packageName}\n\n`;
                 projectType = 'node';
+                logger.debug('Detected Node.js project', { deploymentId, packageName });
                 const hasNextDep =
                     typeof packageJson.dependencies?.next === 'string' ||
                     typeof packageJson.devDependencies?.next === 'string';
                 if (hasNextDep) {
                     projectType = 'nextjs';
                     logs += `Detected Next.js project\n`;
+                    logger.info('Detected Next.js project', { deploymentId, packageName });
                     // Ensure a static export config exists
                     const nextConfigPath = path.join(buildDir, 'next.config.js');
                     const nextConfigMjsPath = path.join(buildDir, 'next.config.mjs');
@@ -108,6 +137,7 @@ class BuildService {
                 }
             } else {
                 logs += `⚠️  No package.json found — treating as static site\n\n`;
+                logger.info('No package.json found, treating as static site', { deploymentId });
             }
 
             let detectedOutputDir: string;
@@ -116,15 +146,22 @@ class BuildService {
             } else {
                 // Install dependencies
                 logs += `Installing dependencies...\n`;
+                logger.info('Installing dependencies', { deploymentId, buildDir });
                 const installResult = await this.runCommand('npm install', deploymentId, {
                     cwd: buildDir,
                 });
                 logs += installResult.stdout + installResult.stderr;
                 logs += `✓ Dependencies installed\n\n`;
+                logger.info('Dependencies installed successfully', { deploymentId });
 
                 // Build project
                 logs += `Building project...\n`;
                 const buildCmd = buildCommand ?? 'npm run build';
+                logger.info('Building project', {
+                    deploymentId,
+                    buildCommand: buildCmd,
+                    projectType,
+                });
                 const buildResult = await this.runCommand(buildCmd, deploymentId, {
                     cwd: buildDir,
                     env: {
@@ -134,6 +171,7 @@ class BuildService {
                 });
                 logs += buildResult.stdout + buildResult.stderr;
                 logs += `✓ Build completed\n\n`;
+                logger.info('Build completed successfully', { deploymentId, buildCommand: buildCmd });
 
                 detectedOutputDir = outputDir
                     ? path.join(buildDir, outputDir)
@@ -144,6 +182,13 @@ class BuildService {
             await fs.writeFile(path.join(buildDir, OUTPUT_METADATA_FILENAME), relativeOutputDir, 'utf-8');
 
             logs += `✓ Output directory detected: ${path.basename(detectedOutputDir)}\n`;
+
+            logger.info('Build process completed successfully', {
+                deploymentId,
+                buildDir,
+                outputDir: detectedOutputDir,
+                projectType,
+            });
 
             return { buildDir, outputDir: detectedOutputDir, logs };
         } catch (error) {
@@ -162,17 +207,25 @@ class BuildService {
             'public', // Some static sites
         ];
 
+        logger.debug('Detecting output directory', { buildDir, possibleDirs });
+
         for (const dir of possibleDirs) {
             const fullPath = path.join(buildDir, dir);
             try {
                 const stats = await fs.stat(fullPath);
                 if (stats.isDirectory()) {
+                    logger.debug('Output directory detected', { buildDir, detectedDir: dir, fullPath });
                     return fullPath;
                 }
             } catch {
                 continue;
             }
         }
+
+        logger.error('Could not detect build output directory', {
+            buildDir,
+            checkedDirs: possibleDirs,
+        });
 
         throw new Error(
             'Could not detect build output directory. Please ensure your project has a build script that outputs to: out, dist, build, or .next'
@@ -211,10 +264,13 @@ class BuildService {
     cancelBuild(deploymentId: string): boolean {
         const child = this.activeProcesses.get(deploymentId);
         if (child) {
+            logger.info('Cancelling build process', { deploymentId });
             child.kill('SIGTERM');
             this.activeProcesses.delete(deploymentId);
+            logger.info('Build process cancelled', { deploymentId });
             return true;
         }
+        logger.debug('No active build process to cancel', { deploymentId });
         return false;
     }
 
@@ -223,18 +279,39 @@ class BuildService {
             const execOptions: ExecOptions = {
                 ...options,
                 maxBuffer: options.maxBuffer ?? 10 * 1024 * 1024,
+                timeout: options.timeout ?? 15 * 60 * 1000,
             };
 
+            logger.debug('Executing command', {
+                deploymentId,
+                command: command.replace(/https:\/\/[^@]+@/, 'https://***@'), // Hide token in logs
+                cwd: options.cwd,
+                timeout: execOptions.timeout,
+            });
+
+            const startTime = Date.now();
             const child = exec(command, execOptions, (error, stdout, stderr) => {
+                const duration = Date.now() - startTime;
                 if (this.activeProcesses.get(deploymentId) === child) {
                     this.activeProcesses.delete(deploymentId);
                 }
                 if (error) {
                     const message = `${typeof stdout === 'string' ? stdout : stdout.toString()}${typeof stderr === 'string' ? stderr : stderr.toString()
                         }`.trim();
+                    logger.error('Command execution failed', {
+                        deploymentId,
+                        command: command.replace(/https:\/\/[^@]+@/, 'https://***@'),
+                        error: error.message,
+                        duration: `${duration}ms`,
+                    });
                     reject(new Error(message || error.message));
                     return;
                 }
+                logger.debug('Command executed successfully', {
+                    deploymentId,
+                    command: command.replace(/https:\/\/[^@]+@/, 'https://***@'),
+                    duration: `${duration}ms`,
+                });
                 resolve({
                     stdout: typeof stdout === 'string' ? stdout : stdout.toString(),
                     stderr: typeof stderr === 'string' ? stderr : stderr.toString(),
@@ -273,6 +350,65 @@ class BuildService {
 
         logger.info(`Prepared static export at ${exportDir}`);
         return exportDir;
+    }
+
+    private startCleanupTimer() {
+        if (this.cleanupTimer) {
+            return;
+        }
+        this.cleanupTimer = setInterval(() => {
+            this.cleanupExpiredBuilds().catch((error) => {
+                logger.warn('Failed to cleanup expired build artifacts:', error);
+            });
+        }, this.CLEANUP_INTERVAL_MS);
+        if (this.cleanupTimer.unref) {
+            this.cleanupTimer.unref();
+        }
+    }
+
+    private async cleanupExpiredBuilds() {
+        logger.debug('Starting cleanup of expired build artifacts', { buildRoot: this.BUILD_ROOT });
+        let entries: string[] = [];
+        try {
+            entries = await fs.readdir(this.BUILD_ROOT);
+        } catch {
+            logger.warn('Could not read build root directory for cleanup', { buildRoot: this.BUILD_ROOT });
+            return;
+        }
+
+        const now = Date.now();
+        let deletedCount = 0;
+        await Promise.all(
+            entries.map(async (entry) => {
+                const fullPath = path.join(this.BUILD_ROOT, entry);
+                try {
+                    const stats = await fs.stat(fullPath);
+                    if (!stats.isDirectory()) {
+                        return;
+                    }
+                    const age = now - stats.mtimeMs;
+                    if (age > this.ARTIFACT_TTL_MS) {
+                        await fs.rm(fullPath, { recursive: true, force: true });
+                        deletedCount++;
+                        logger.info(`Deleted expired build directory`, {
+                            path: fullPath,
+                            age: `${Math.round(age / (1000 * 60 * 60))} hours`,
+                        });
+                    }
+                } catch (error) {
+                    logger.warn('Error during cleanup of build directory', {
+                        path: fullPath,
+                        error: error instanceof Error ? error.message : String(error),
+                    });
+                }
+            })
+        );
+
+        if (deletedCount > 0) {
+            logger.info('Cleanup completed', { deletedCount, totalEntries: entries.length });
+        } else {
+            logger.debug('Cleanup completed, no expired artifacts found', { totalEntries: entries.length });
+        }
     }
 }
 

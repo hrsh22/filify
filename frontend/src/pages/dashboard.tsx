@@ -3,12 +3,14 @@ import { Plus, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useProjects } from '@/hooks/use-projects'
+import { useAutoDeployPoller } from '@/hooks/use-auto-deploy-poller'
 import { ProjectCard } from '@/components/projects/project-card'
 import { ProjectEmptyState } from '@/components/projects/project-empty-state'
 
 export function DashboardPage() {
   const navigate = useNavigate()
   const { projects, loading, error, refresh } = useProjects()
+  useAutoDeployPoller(true)
 
   return (
     <div className="space-y-8">

@@ -1,0 +1,180 @@
+import { Request, Response } from 'express';
+import crypto from 'crypto';
+import { db } from '../db';
+import { projects, deployments } from '../db/schema';
+import { eq } from 'drizzle-orm';
+import { webhookSecretService } from '../services/webhook-secret.service';
+import { logger } from '../utils/logger';
+import { generateId } from '../utils/generateId';
+import { deploymentQueue } from '../services/deployment-queue.service';
+import { deploymentsController } from './deployments.controller';
+
+type GithubPushPayload = {
+    ref?: string;
+    repository?: {
+        full_name?: string;
+    };
+    head_commit?: {
+        id?: string;
+        message?: string;
+    };
+};
+
+class WebhooksController {
+    private verifySignature(secret: string, payload: Buffer, signatureHeader: string | undefined): boolean {
+        if (!signatureHeader || !signatureHeader.startsWith('sha256=')) {
+            return false;
+        }
+
+        const computed = `sha256=${crypto.createHmac('sha256', secret).update(payload).digest('hex')}`;
+        const received = Buffer.from(signatureHeader);
+        const expected = Buffer.from(computed);
+
+        if (received.length !== expected.length) {
+            return false;
+        }
+
+        return crypto.timingSafeEqual(received, expected);
+    }
+
+    async handleGithubWebhook(req: Request, res: Response) {
+        const deliveryId = req.header('X-GitHub-Delivery');
+        const event = req.header('X-GitHub-Event');
+        const signature = req.header('X-Hub-Signature-256');
+        const payloadBuffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || '{}');
+
+        logger.info('GitHub webhook received', {
+            deliveryId,
+            event,
+            hasSignature: !!signature,
+            ip: req.ip,
+        });
+
+        if (event !== 'push') {
+            logger.debug('Webhook ignored: not a push event', { event, deliveryId });
+            return res.status(200).json({ ignored: true });
+        }
+
+        let payload: GithubPushPayload;
+        try {
+            payload = JSON.parse(payloadBuffer.toString('utf8')) as GithubPushPayload;
+        } catch (error) {
+            logger.warn('Invalid GitHub webhook payload', {
+                error: error instanceof Error ? error.message : String(error),
+                deliveryId,
+            });
+            return res.status(400).json({ error: 'InvalidPayload' });
+        }
+
+        const repoFullName = payload.repository?.full_name;
+        const ref = payload.ref ?? '';
+        const branch = ref.split('/').pop();
+        const commitSha = payload.head_commit?.id;
+        const commitMessage = payload.head_commit?.message;
+
+        logger.debug('Webhook payload parsed', {
+            deliveryId,
+            repoFullName,
+            branch,
+            commitSha,
+        });
+
+        if (!repoFullName) {
+            logger.debug('Webhook ignored: no repository name', { deliveryId });
+            return res.status(200).json({ ignored: true });
+        }
+
+        try {
+            const project = await db.query.projects.findFirst({
+                where: eq(projects.repoName, repoFullName),
+                with: { user: true },
+            });
+
+            if (!project || !project.webhookEnabled || !project.webhookSecret) {
+                logger.debug('Webhook ignored: project not found or webhook disabled', {
+                    deliveryId,
+                    repoFullName,
+                    projectId: project?.id,
+                    webhookEnabled: project?.webhookEnabled,
+                });
+                return res.status(200).json({ ignored: true });
+            }
+
+            logger.debug('Verifying webhook signature', {
+                deliveryId,
+                projectId: project.id,
+                repoFullName,
+            });
+
+            const secret = webhookSecretService.decrypt(project.webhookSecret);
+            const signatureValid = this.verifySignature(secret, payloadBuffer, signature);
+
+            if (!signatureValid) {
+                logger.warn('Invalid webhook signature', {
+                    projectId: project.id,
+                    deliveryId,
+                    repoFullName,
+                });
+                return res.status(401).json({ error: 'InvalidSignature' });
+            }
+
+            logger.debug('Webhook signature verified', { projectId: project.id, deliveryId });
+
+            const expectedBranch = project.autoDeployBranch ?? project.repoBranch ?? 'main';
+
+            if (!branch || branch !== expectedBranch) {
+                logger.info('Webhook ignored: branch mismatch', {
+                    projectId: project.id,
+                    deliveryId,
+                    receivedBranch: branch,
+                    expectedBranch,
+                });
+                return res.status(200).json({ ignored: true });
+            }
+
+            const deploymentId = generateId();
+
+            logger.info('Creating webhook-triggered deployment', {
+                deploymentId,
+                projectId: project.id,
+                projectName: project.name,
+                branch,
+                commitSha,
+                commitMessage,
+                deliveryId,
+            });
+
+            await db.insert(deployments).values({
+                id: deploymentId,
+                projectId: project.id,
+                status: 'pending_build',
+                triggeredBy: 'webhook',
+                commitSha: commitSha ?? null,
+                commitMessage: commitMessage ?? null,
+                createdAt: new Date(),
+            });
+
+            logger.info('Enqueuing webhook deployment', {
+                deploymentId,
+                projectId: project.id,
+            });
+
+            deploymentQueue.enqueue(project.id, () => deploymentsController.runBuildPipeline(deploymentId, project));
+
+            logger.info('Webhook deployment queued successfully', {
+                deploymentId,
+                projectId: project.id,
+                deliveryId: deliveryId ?? 'n/a',
+            });
+
+            return res.status(200).json({ deploymentId });
+        } catch (error) {
+            logger.error('Failed to process GitHub webhook:', error);
+            return res.status(500).json({ error: 'Internal Server Error' });
+        }
+    }
+}
+
+export const webhooksController = new WebhooksController();
+
+

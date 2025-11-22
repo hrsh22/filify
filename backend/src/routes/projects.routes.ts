@@ -3,7 +3,7 @@ import { projectsController } from '../controllers/projects.controller';
 import { deploymentsController } from '../controllers/deployments.controller';
 import { isAuthenticated } from '../middleware/auth';
 import { validateRequest } from '../middleware/validateRequest';
-import { createProjectSchema, updateProjectSchema } from '../utils/validators';
+import { createProjectSchema, updateProjectSchema, webhookToggleSchema, emptyBodySchema } from '../utils/validators';
 
 const router = Router();
 
@@ -24,6 +24,18 @@ router.put(
 router.delete('/:id', isAuthenticated, (req, res) => projectsController.delete(req, res));
 router.get('/:id/deployments', isAuthenticated, (req, res) =>
   deploymentsController.listByProject(req, res)
+);
+router.post(
+  '/:id/webhook/enable',
+  isAuthenticated,
+  validateRequest(webhookToggleSchema),
+  (req, res) => projectsController.enableWebhook(req, res)
+);
+router.post(
+  '/:id/webhook/disable',
+  isAuthenticated,
+  validateRequest(emptyBodySchema),
+  (req, res) => projectsController.disableWebhook(req, res)
 );
 
 export default router;

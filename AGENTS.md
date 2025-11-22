@@ -18,20 +18,20 @@
 
 ## Application Overview
 
-**Last Updated**: 2025-01-27 (Initial documentation)
+**Last Updated**: 2025-11-21
 
 Filify is a decentralized deployment platform that enables developers to deploy web applications to Filecoin storage and serve them via Ethereum Name Service (ENS) domains.
 
 ### Core Workflow
 
 1. User authenticates via GitHub OAuth
-2. User creates a project linking a GitHub repository
-3. User configures ENS domain and build settings
-4. User triggers deployment
-5. Backend clones repository and builds project
-6. Frontend uploads build artifacts to Filecoin
-7. Backend updates ENS contenthash with IPFS CID
-8. Deployment is accessible via ENS domain
+2. User creates a project linking a GitHub repository, ENS settings, and (optionally) auto-deploy branch + webhook
+3. Manual deployments can be triggered from the dashboard/project page
+4. Auto-deployments fire when GitHub sends a push webhook; the backend enqueues a build job per project
+5. Backend clones the repository, builds it, and stores build artifacts for up to 24h
+6. The frontend auto-deploy poller downloads pending artifacts, uploads them to Filecoin via `filecoin-pin`, and receives an IPFS CID
+7. Backend updates the ENS contenthash with the new CID
+8. Deployment is accessible via ENS domain and pinned on Filecoin/IPFS
 
 ---
 
@@ -73,6 +73,8 @@ Filify is a decentralized deployment platform that enables developers to deploy 
 - ENS domain configuration
 - Deployment history viewing
 - Resume failed deployments capability
+- Auto-deploy polling that uploads backend-built artifacts automatically when webhooks fire
+- Project settings UI for enabling/disabling GitHub push webhooks and choosing the auto-deploy branch
 
 **Components**:
 
@@ -101,10 +103,10 @@ Filify is a decentralized deployment platform that enables developers to deploy 
 
 **Services**:
 
-- Build Service: Handles repository cloning, dependency installation, and project building. Supports Next.js, Node.js, and static sites. Auto-detects project types and output directories.
+- Build Service: Handles repository cloning, dependency installation, and project building. Supports Next.js, Node.js, and static sites, auto-detects project types/output directories, queues builds per project, enforces 15-minute subprocess timeouts, and retains artifacts for 24h with automatic cleanup.
 - ENS Service: Updates ENS contenthash with IPFS CIDs. Normalizes CID formats, encodes contenthash, and verifies updates.
-- GitHub Service: Integrates with GitHub API to fetch repositories and branches using encrypted OAuth tokens.
-- Encryption Service: Provides AES-256-GCM encryption/decryption for sensitive data (tokens, private keys).
+- GitHub Service: Integrates with GitHub API to fetch repositories/branches and to register/unregister push webhooks using encrypted secrets.
+- Encryption Service: Provides AES-256-GCM encryption/decryption for sensitive data (tokens, private keys) plus a dedicated key for webhook secrets.
 
 **Endpoints**: All API endpoints are functional and documented in README.md. Authentication, projects, repositories, and deployments are fully implemented.
 
@@ -120,7 +122,8 @@ Filify is a decentralized deployment platform that enables developers to deploy 
 
 ### Schema Details
 
-- Schema is stable with users, projects, and deployments tables.
+- `projects` now store `auto_deploy_branch`, `webhook_enabled`, and encrypted `webhook_secret` metadata so each project can manage its own GitHub webhook configuration.
+- `deployments` track `triggered_by` (`manual`/`webhook`), `commit_sha`, `commit_message`, and a `build_artifacts_path` pointer so the frontend can download backend-built files.
 
 ---
 
@@ -141,7 +144,7 @@ Filify is a decentralized deployment platform that enables developers to deploy 
 - **Build Configuration**: Custom build commands and output directories
 - **ENS Configuration**: Domain name and private key (encrypted)
 
-**Current State**: Full CRUD operations for projects. Users can create projects by selecting GitHub repositories and branches. ENS configuration includes domain name and encrypted private key. Build configuration supports custom commands and output directories. Project history shows all deployments.
+**Current State**: Full CRUD operations for projects. Users can create projects by selecting GitHub repositories and branches, configure ENS + build settings, and opt into auto-deploy by selecting a branch and enabling the GitHub webhook toggle from the project detail view. Project history shows all deployments with trigger provenance and commit metadata.
 
 ### Build Process
 
@@ -150,7 +153,7 @@ Filify is a decentralized deployment platform that enables developers to deploy 
 - **Output Detection**: Auto-detects output directories (out, dist, build, .next)
 - **Logs**: Real-time build logs stored in database
 
-**Current State**: Build service automatically detects Next.js, Node.js, and static projects. For Next.js, automatically creates static export config if missing. Builds run in isolated directories under `/tmp/deployments`. Build logs are captured and stored. Supports resuming from previous builds to skip cloning/building steps.
+**Current State**: Build service automatically detects Next.js, Node.js, and static projects. For Next.js, it creates a static export config if missing. Builds run in isolated directories under the repo-level `builds/` folder (auto-cleaned after 24h), and only one build per project runs at a time via an in-memory queue. Build logs are captured, output folders are recorded for artifact downloads, and failed runs can still resume from cached workspaces.
 
 ### Filecoin Integration
 
@@ -173,10 +176,10 @@ Filify is a decentralized deployment platform that enables developers to deploy 
 ### Deployment Status Flow
 
 ```
-cloning → building → uploading → updating_ens → success/failed
+pending_build → cloning → building → pending_upload → uploading → updating_ens → success/failed
 ```
 
-**Current State**: Status flow is: `cloning → building → uploading → updating_ens → success/failed`. Each status is tracked in database. Frontend polls for status updates. Failed deployments can be resumed from previous build artifacts.
+**Current State**: The backend records queue/build progress (`pending_build`/`cloning`/`building`), then exposes artifacts through `pending_upload`. The frontend auto-deploy poller transitions deployments to `uploading` while it pushes artifacts to Filecoin before the backend finishes with `updating_ens` and `success`/`failed`. Manual uploads still use the same statuses, and failed deployments can be resumed from previous build artifacts.
 
 ---
 
@@ -197,6 +200,8 @@ cloning → building → uploading → updating_ens → success/failed
 - `GET /api/projects/:id` - Get single project details
 - `PUT /api/projects/:id` - Update project
 - `DELETE /api/projects/:id` - Delete project
+- `POST /api/projects/:id/webhook/enable` - Register GitHub push webhook + enable auto deploy
+- `POST /api/projects/:id/webhook/disable` - Remove GitHub push webhook + disable auto deploy
 
 ### Repository Endpoints
 
@@ -205,12 +210,19 @@ cloning → building → uploading → updating_ens → success/failed
 
 ### Deployment Endpoints
 
-- `POST /api/deployments` - Create new deployment (trigger build)
+- `POST /api/deployments` - Create new deployment (manual trigger)
+- `GET /api/deployments` - List deployments with optional status/limit filters (used by auto-deploy poller)
 - `GET /api/deployments/:id` - Get deployment status
-- `POST /api/deployments/:id/ens` - Update ENS with IPFS CID
+- `GET /api/deployments/:id/artifacts` - Download backend build artifacts as a zip
+- `POST /api/deployments/:id/upload/fail` - Mark upload as failed (used when Filecoin upload errors)
+- `POST /api/deployments/:id/ens` - Update ENS with IPFS CID after upload
 - `GET /api/projects/:id/deployments` - List project deployments
 
-**Status**: All endpoints are functional. Full REST API for authentication, projects, repositories, and deployments.
+### Webhook Endpoint
+
+- `POST /api/webhooks/github` - GitHub push webhook receiver (HMAC verified, enqueues `pending_build` deployments)
+
+**Status**: All endpoints are functional. Auto-deploy webhooks, artifact downloads, and deployment filtering are available in addition to the existing authentication/project/repository APIs.
 
 ---
 
@@ -256,6 +268,7 @@ cloning → building → uploading → updating_ens → success/failed
 - `DATABASE_URL` - SQLite database path
 - `SESSION_SECRET` - Session encryption secret
 - `ENCRYPTION_KEY` - AES encryption key (64 hex chars)
+- `GITHUB_WEBHOOK_SECRET_ENCRYPTION_KEY` - Dedicated AES key for encrypting GitHub webhook secrets
 - `GITHUB_CLIENT_ID` - GitHub OAuth client ID
 - `GITHUB_CLIENT_SECRET` - GitHub OAuth client secret
 
@@ -271,7 +284,7 @@ cloning → building → uploading → updating_ens → success/failed
 - Session key-based authentication (not production-ready for multi-user)
 - SQLite database (consider PostgreSQL for production)
 - No "bring your own wallet" support yet
-- Build artifacts stored temporarily in `/tmp/deployments`
+- Build artifacts stored temporarily in the repo-level `builds/` folder (cleaned after ~24h)
 
 ### Known Issues
 
@@ -302,6 +315,13 @@ Failed deployments can be resumed from previous builds:
 - Continues from upload or ENS update phase
 
 **Status**: Build detection logic is stable. Supports Next.js (with auto static export config), Node.js projects, and static sites. Output directory auto-detection works for common patterns (out, dist, build, .next, public). Resume feature allows reusing previous build artifacts.
+
+### Auto Deploy Pipeline
+
+- GitHub push webhooks are registered per-project with encrypted secrets and rate-limited intake.
+- Each webhook event creates a `pending_build` deployment and is enqueued so only one build runs per project at a time.
+- After the backend marks a deployment `pending_upload`, the frontend auto-deploy poller downloads artifacts, uploads them to Filecoin, and calls the ENS update endpoint.
+- Upload failures are reported back via `POST /api/deployments/:id/upload/fail` so the UI shows a failed deployment with logs.
 
 ---
 

@@ -2,7 +2,6 @@ import JSZip from 'jszip'
 import { api } from './api'
 import type { UploadInput } from '@/types/upload/input'
 
-const DEFAULT_BACKEND_URL = 'http://localhost:3000'
 const HTML_EXTENSIONS = new Set(['.html', '.htm'])
 const IGNORED_PATH_SEGMENTS = new Set([
   '.git',
@@ -14,7 +13,7 @@ const IGNORED_PATH_SEGMENTS = new Set([
 
 async function fetchViaApi(deploymentId: string): Promise<ArrayBuffer | null> {
   try {
-    const response = await api.get<ArrayBuffer>(`/deployments/${deploymentId}/artifact`, { responseType: 'arraybuffer' })
+    const response = await api.get<ArrayBuffer>(`/deployments/${deploymentId}/artifacts`, { responseType: 'arraybuffer' })
     return response.data
   } catch (error) {
     return null
@@ -22,7 +21,7 @@ async function fetchViaApi(deploymentId: string): Promise<ArrayBuffer | null> {
 }
 
 async function fetchViaStaticPath(deploymentId: string): Promise<ArrayBuffer> {
-  const backendBase = import.meta.env.VITE_BACKEND_URL?.replace(/\/$/, '') ?? DEFAULT_BACKEND_URL
+  const backendBase = import.meta.env.VITE_BACKEND_URL?.replace(/\/$/, '')
   const buildsBase = `${backendBase}/builds`
   const response = await fetch(`${buildsBase}/${deploymentId}.zip`, {
     credentials: 'include',

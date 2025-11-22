@@ -7,11 +7,13 @@ export interface Project {
   repoName: string
   repoUrl: string
   repoBranch: string
+  autoDeployBranch: string
   ensName: string
   ensPrivateKey?: string
   ethereumRpcUrl: string
   buildCommand?: string | null
   outputDir?: string | null
+  webhookEnabled: boolean
   createdAt: string
   updatedAt: string
   deployments?: Deployment[]

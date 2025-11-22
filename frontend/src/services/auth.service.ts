@@ -1,15 +1,9 @@
 import type { User } from '@/types'
 import { api } from './api'
 
-const DEFAULT_BACKEND_URL = 'http://localhost:3000'
-
-function getBackendBaseUrl() {
-  return import.meta.env.VITE_BACKEND_URL?.replace(/\/$/, '') ?? DEFAULT_BACKEND_URL
-}
-
 export const authService = {
   login() {
-    window.location.href = `${getBackendBaseUrl()}/api/auth/github`
+    window.location.href = `${import.meta.env.VITE_BACKEND_URL}/api/auth/github`
   },
   async logout() {
     await api.post('/auth/logout')

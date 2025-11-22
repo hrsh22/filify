@@ -61,12 +61,18 @@ This document lists all required and optional environment variables for the back
     - Generate with: `openssl rand -hex 32`
     - Example: `ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef`
 
+- **`GITHUB_WEBHOOK_SECRET_ENCRYPTION_KEY`** (required)
+    - Dedicated AES-256-GCM key for encrypting GitHub webhook secrets
+    - Must be exactly 64 hex characters (32 bytes)
+    - Generate with: `openssl rand -hex 32`
+    - Example: `GITHUB_WEBHOOK_SECRET_ENCRYPTION_KEY=abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789`
+
 ### Ethereum/ENS
 
-- **`DEFAULT_ETHEREUM_RPC`** (optional, default: `https://eth-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_KEY}`)
+- **`DEFAULT_ETHEREUM_RPC`** (optional, default: `https://eth-mainnet.g.alchemy.com/v2/${process.env.VITE_ALCHEMY_KEY}`)
     - Ethereum RPC endpoint URL
     - Used for ENS updates
-    - Example: `DEFAULT_ETHEREUM_RPC=https://eth-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_KEY}`
+    - Example: `DEFAULT_ETHEREUM_RPC=https://eth-mainnet.g.alchemy.com/v2/${process.env.VITE_ALCHEMY_KEY}`
 
 ## Example .env File
 
@@ -91,9 +97,10 @@ DATABASE_URL=sqlite:./data/dev.db
 # Encryption Key (generate with: openssl rand -hex 32)
 # MUST be exactly 64 hex characters (32 bytes)
 ENCRYPTION_KEY=your_64_character_hex_encryption_key
+GITHUB_WEBHOOK_SECRET_ENCRYPTION_KEY=your_second_64_character_hex_key
 
 # Default Ethereum RPC
-DEFAULT_ETHEREUM_RPC=https://eth-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_KEY}
+DEFAULT_ETHEREUM_RPC=https://eth-mainnet.g.alchemy.com/v2/${process.env.VITE_ALCHEMY_KEY}
 ```
 
 ## Quick Setup Commands

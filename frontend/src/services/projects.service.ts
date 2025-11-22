@@ -35,6 +35,16 @@ export const projectsService = {
   async remove(id: string) {
     await api.delete(`/projects/${id}`)
   },
+  async enableWebhook(id: string, branch?: string) {
+    const { data } = await api.post<{ webhookEnabled: boolean; autoDeployBranch: string }>(`/projects/${id}/webhook/enable`, {
+      branch,
+    })
+    return data
+  },
+  async disableWebhook(id: string) {
+    const { data } = await api.post<{ webhookEnabled: boolean }>(`/projects/${id}/webhook/disable`)
+    return data
+  },
 }
 
 

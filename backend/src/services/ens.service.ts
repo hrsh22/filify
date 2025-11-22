@@ -141,12 +141,18 @@ class ENSService {
                 gasUsed: receipt.gasUsed.toString(),
             };
         } catch (error) {
-            logger.error('ENS update failed:', error);
+            logger.error('ENS update failed:', {
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+                ensName,
+                ipfsCid,
+            });
             throw new Error(`Failed to update ENS contenthash: ${(error as Error).message}`);
         }
     }
 
     async verifyContentHash(ensName: string, expectedCid: string, rpcUrl: string): Promise<boolean> {
+        logger.debug('Verifying ENS contenthash', { ensName, expectedCid });
         try {
             const provider = new ethers.JsonRpcProvider(rpcUrl);
             const resolver = await provider.getResolver(ensName);
@@ -174,9 +180,15 @@ class ENSService {
                 return false;
             }
 
-            return decoded === expectedCid;
+            const matches = decoded === expectedCid;
+            logger.debug('ENS verification result', { ensName, matches, decoded, expectedCid });
+            return matches;
         } catch (error) {
-            logger.warn('ENS verification failed:', error);
+            logger.warn('ENS verification failed:', {
+                error: error instanceof Error ? error.message : String(error),
+                ensName,
+                expectedCid,
+            });
             return false;
         }
     }

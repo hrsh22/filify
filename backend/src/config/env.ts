@@ -21,6 +21,7 @@ const envSchema = z.object({
 
   // Encryption (must be 64 character hex string for 32 bytes)
   ENCRYPTION_KEY: z.string().length(64),
+  GITHUB_WEBHOOK_SECRET_ENCRYPTION_KEY: z.string().length(64),
 
   // Defaults
   DEFAULT_ETHEREUM_RPC: z.string().url().default(`https://eth-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_KEY}`),

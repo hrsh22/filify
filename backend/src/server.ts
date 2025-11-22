@@ -6,17 +6,29 @@ import passport from 'passport';
 import SQLiteStore from 'connect-sqlite3';
 import { env } from './config/env';
 import { errorHandler } from './middleware/errorHandler';
-import { apiLimiter } from './middleware/rateLimiter';
+import { requestLogger } from './middleware/requestLogger';
+import { logger } from './utils/logger';
 import authRoutes from './routes/auth.routes';
 import projectsRoutes from './routes/projects.routes';
 import repositoriesRoutes from './routes/repositories.routes';
 import deploymentsRoutes from './routes/deployments.routes';
+import webhooksRoutes from './routes/webhooks.routes';
 import './config/passport'; // Initialize passport strategies
 import fs from 'fs';
 import path from 'path';
 
 const app = express();
 const SessionStore = SQLiteStore(session) as any;
+
+const backendUrl = new URL(env.BACKEND_URL);
+const frontendUrl = new URL(env.FRONTEND_URL);
+const sameOrigin = backendUrl.origin === frontendUrl.origin;
+const cookieSecure = backendUrl.protocol === 'https:';
+const cookieSameSite = !sameOrigin && cookieSecure ? 'none' : 'lax';
+
+// Trust proxy (needed for ngrok/tunneling services)
+// This allows Express to properly handle X-Forwarded-* headers
+app.set('trust proxy', true);
 
 // Ensure data directory exists for sessions
 const dataDir = path.join(process.cwd(), 'data');
@@ -32,6 +44,12 @@ app.use(
         credentials: true,
     })
 );
+
+// Request logging (before routes)
+app.use(requestLogger);
+
+// Webhooks (needs raw body for signature verification)
+app.use('/api/webhooks', webhooksRoutes);
 
 // Body parsing
 app.use(express.json());
@@ -55,9 +73,9 @@ app.use(
         saveUninitialized: false,
         cookie: {
             httpOnly: true,
-            secure: env.NODE_ENV === 'production',
+            secure: cookieSecure,
             maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-            sameSite: 'lax',
+            sameSite: cookieSameSite,
         },
     })
 );
@@ -65,9 +83,6 @@ app.use(
 // Passport initialization
 app.use(passport.initialize());
 app.use(passport.session());
-
-// Rate limiting
-app.use('/api', apiLimiter);
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -86,9 +101,14 @@ app.use(errorHandler);
 const PORT = env.PORT || 3000;
 
 app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`📝 Environment: ${env.NODE_ENV}`);
-    console.log(`🌐 Frontend URL: ${env.FRONTEND_URL}`);
-    console.log(`🔗 Backend URL: ${env.BACKEND_URL}`);
+    logger.info('🚀 Server starting', {
+        port: PORT,
+        environment: env.NODE_ENV,
+        frontendUrl: env.FRONTEND_URL,
+        backendUrl: env.BACKEND_URL,
+    });
+    logger.info(`📝 Environment: ${env.NODE_ENV}`);
+    logger.info(`🌐 Frontend URL: ${env.FRONTEND_URL}`);
+    logger.info(`🔗 Backend URL: ${env.BACKEND_URL}`);
 });
 

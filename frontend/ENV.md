@@ -28,10 +28,10 @@ This document lists all environment variables for the frontend React application
 
 ### Ethereum/ENS Configuration
 
-- **`VITE_DEFAULT_ETHEREUM_RPC`** (optional, default: `https://eth-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_KEY}`)
+- **`VITE_DEFAULT_ETHEREUM_RPC`** (optional, default: `https://eth-mainnet.g.alchemy.com/v2/${process.env.VITE_ALCHEMY_KEY}`)
     - Default Ethereum RPC URL for ENS operations
     - Pre-filled in the new project form
-    - Example: `VITE_DEFAULT_ETHEREUM_RPC=https://eth-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_KEY}`
+    - Example: `VITE_DEFAULT_ETHEREUM_RPC=https://eth-mainnet.g.alchemy.com/v2/${process.env.VITE_ALCHEMY_KEY}`
 
 ### Filecoin Pin Advanced Configuration
 
@@ -58,7 +58,7 @@ VITE_API_URL=http://localhost:3000/api
 VITE_BACKEND_URL=http://localhost:3000
 
 # Optional - Ethereum/ENS
-VITE_DEFAULT_ETHEREUM_RPC=https://eth-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_KEY}
+VITE_DEFAULT_ETHEREUM_RPC=https://eth-mainnet.g.alchemy.com/v2/${process.env.VITE_ALCHEMY_KEY}
 
 # Optional - Filecoin Advanced
 # VITE_FILECOIN_RPC_URL=https://api.filecoin.io/rpc/v1

@@ -6,10 +6,20 @@ import { generateId } from '../utils/generateId';
 import { encryptionService } from '../services/encryption.service';
 import { githubService } from '../services/github.service';
 import { logger } from '../utils/logger';
+import { webhookSecretService } from '../services/webhook-secret.service';
+import { env } from '../config/env';
+
+const WEBHOOK_ENDPOINT = '/api/webhooks/github';
+
+function getWebhookUrl() {
+  return new URL(WEBHOOK_ENDPOINT, env.BACKEND_URL).toString();
+}
 
 export class ProjectsController {
   async list(req: Request, res: Response) {
     const userId = (req.user as any).id;
+
+    logger.debug('Listing projects', { userId });
 
     try {
       const userProjects = await db.query.projects.findMany({
@@ -22,9 +32,18 @@ export class ProjectsController {
         },
       });
 
+      logger.info('Projects listed successfully', {
+        userId,
+        count: userProjects.length,
+      });
+
       res.json(userProjects);
     } catch (error) {
-      logger.error('Failed to list projects:', error);
+      logger.error('Failed to list projects:', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        userId,
+      });
       res.status(500).json({
         error: 'Internal Server Error',
         message: 'Failed to fetch projects',
@@ -35,6 +54,8 @@ export class ProjectsController {
   async getById(req: Request, res: Response) {
     const { id } = req.params;
     const userId = (req.user as any).id;
+
+    logger.debug('Getting project by ID', { projectId: id, userId });
 
     try {
       const project = await db.query.projects.findFirst({
@@ -48,15 +69,27 @@ export class ProjectsController {
       });
 
       if (!project) {
+        logger.warn('Project not found', { projectId: id, userId });
         return res.status(404).json({
           error: 'Not Found',
           message: 'Project not found',
         });
       }
 
+      logger.debug('Project retrieved successfully', {
+        projectId: id,
+        projectName: project.name,
+        userId,
+      });
+
       res.json(project);
     } catch (error) {
-      logger.error('Failed to get project:', error);
+      logger.error('Failed to get project:', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        projectId: id,
+        userId,
+      });
       res.status(500).json({
         error: 'Internal Server Error',
         message: 'Failed to fetch project',
@@ -79,36 +112,63 @@ export class ProjectsController {
       outputDir,
     } = req.body;
 
+    logger.info('Creating new project', {
+      userId,
+      projectName: name,
+      repoName,
+      repoBranch: repoBranch || 'main',
+      ensName,
+    });
+
     try {
       // Validate repository access
       const [owner, repo] = repoName.split('/');
+      logger.debug('Validating repository access', { owner, repo, userId });
       await githubService.getRepository(user.githubToken, owner, repo);
+      logger.debug('Repository access validated', { owner, repo });
 
       // Encrypt sensitive data
       const encryptedENSKey = encryptionService.encrypt(ensPrivateKey);
 
+      const projectId = generateId();
       const project = await db
         .insert(projects)
         .values({
-          id: generateId(),
+          id: projectId,
           userId,
           name,
           repoName,
           repoUrl,
           repoBranch: repoBranch || 'main',
+          autoDeployBranch: repoBranch || 'main',
           ensName,
           ensPrivateKey: encryptedENSKey,
           ethereumRpcUrl,
           buildCommand: buildCommand || null,
           outputDir: outputDir || null,
+          webhookEnabled: false,
+          webhookSecret: null,
           createdAt: new Date(),
           updatedAt: new Date(),
         })
         .returning();
 
+      logger.info('Project created successfully', {
+        projectId,
+        projectName: name,
+        repoName,
+        userId,
+      });
+
       res.status(201).json(project[0]);
     } catch (error) {
-      logger.error('Failed to create project:', error);
+      logger.error('Failed to create project:', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        projectName: name,
+        repoName,
+        userId,
+      });
       res.status(500).json({
         error: 'Internal Server Error',
         message: 'Failed to create project',
@@ -121,6 +181,12 @@ export class ProjectsController {
     const userId = (req.user as any).id;
     const updates = req.body;
 
+    logger.info('Updating project', {
+      projectId: id,
+      userId,
+      updateFields: Object.keys(updates),
+    });
+
     try {
       // Verify ownership
       const project = await db.query.projects.findFirst({
@@ -128,6 +194,7 @@ export class ProjectsController {
       });
 
       if (!project) {
+        logger.warn('Project not found for update', { projectId: id, userId });
         return res.status(404).json({
           error: 'Not Found',
           message: 'Project not found',
@@ -136,6 +203,7 @@ export class ProjectsController {
 
       // Encrypt ENS key if provided
       if (updates.ensPrivateKey) {
+        logger.debug('Encrypting ENS private key for update', { projectId: id });
         updates.ensPrivateKey = encryptionService.encrypt(updates.ensPrivateKey);
       }
 
@@ -148,9 +216,20 @@ export class ProjectsController {
         .where(eq(projects.id, id))
         .returning();
 
+      logger.info('Project updated successfully', {
+        projectId: id,
+        projectName: updated[0]?.name,
+        userId,
+      });
+
       res.json(updated[0]);
     } catch (error) {
-      logger.error('Failed to update project:', error);
+      logger.error('Failed to update project:', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        projectId: id,
+        userId,
+      });
       res.status(500).json({
         error: 'Internal Server Error',
         message: 'Failed to update project',
@@ -162,12 +241,15 @@ export class ProjectsController {
     const { id } = req.params;
     const userId = (req.user as any).id;
 
+    logger.info('Deleting project', { projectId: id, userId });
+
     try {
       const project = await db.query.projects.findFirst({
         where: and(eq(projects.id, id), eq(projects.userId, userId)),
       });
 
       if (!project) {
+        logger.warn('Project not found for deletion', { projectId: id, userId });
         return res.status(404).json({
           error: 'Not Found',
           message: 'Project not found',
@@ -176,12 +258,169 @@ export class ProjectsController {
 
       await db.delete(projects).where(eq(projects.id, id));
 
+      logger.info('Project deleted successfully', {
+        projectId: id,
+        projectName: project.name,
+        userId,
+      });
+
       res.status(204).send();
     } catch (error) {
-      logger.error('Failed to delete project:', error);
+      logger.error('Failed to delete project:', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        projectId: id,
+        userId,
+      });
       res.status(500).json({
         error: 'Internal Server Error',
         message: 'Failed to delete project',
+      });
+    }
+  }
+
+  async enableWebhook(req: Request, res: Response) {
+    const { id } = req.params;
+    const userId = (req.user as any).id;
+    const { branch } = req.body as { branch?: string };
+
+    logger.info('Enabling webhook for project', { projectId: id, userId, branch });
+
+    try {
+      const project = await db.query.projects.findFirst({
+        where: and(eq(projects.id, id), eq(projects.userId, userId)),
+        with: {
+          user: true,
+        },
+      });
+
+      if (!project) {
+        logger.warn('Project not found for webhook enable', { projectId: id, userId });
+        return res.status(404).json({
+          error: 'Not Found',
+          message: 'Project not found',
+        });
+      }
+
+      const secretPlain = webhookSecretService.generate();
+      const encryptedSecret = webhookSecretService.encrypt(secretPlain);
+      const webhookUrl = getWebhookUrl();
+
+      logger.debug('Registering webhook with GitHub', {
+        projectId: id,
+        repoName: project.repoName,
+        webhookUrl,
+      });
+
+      await githubService.registerWebhook(project.user.githubToken, project.repoName, webhookUrl, secretPlain);
+
+      const selectedBranch = branch || project.autoDeployBranch || project.repoBranch || 'main';
+
+      const [updated] = await db
+        .update(projects)
+        .set({
+          webhookEnabled: true,
+          webhookSecret: encryptedSecret,
+          autoDeployBranch: selectedBranch,
+          updatedAt: new Date(),
+        })
+        .where(eq(projects.id, id))
+        .returning();
+
+      logger.info('Webhook enabled successfully', {
+        projectId: id,
+        repoName: project.repoName,
+        autoDeployBranch: selectedBranch,
+        userId,
+      });
+
+      res.json({
+        webhookEnabled: true,
+        autoDeployBranch: updated?.autoDeployBranch ?? selectedBranch,
+      });
+    } catch (error) {
+      logger.error('Failed to enable webhook:', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        projectId: id,
+        userId,
+      });
+      res.status(500).json({
+        error: 'Internal Server Error',
+        message: 'Failed to enable webhook',
+      });
+    }
+  }
+
+  async disableWebhook(req: Request, res: Response) {
+    const { id } = req.params;
+    const userId = (req.user as any).id;
+
+    logger.info('Disabling webhook for project', { projectId: id, userId });
+
+    try {
+      const project = await db.query.projects.findFirst({
+        where: and(eq(projects.id, id), eq(projects.userId, userId)),
+        with: {
+          user: true,
+        },
+      });
+
+      if (!project) {
+        logger.warn('Project not found for webhook disable', { projectId: id, userId });
+        return res.status(404).json({
+          error: 'Not Found',
+          message: 'Project not found',
+        });
+      }
+
+      const webhookUrl = getWebhookUrl();
+
+      logger.debug('Unregistering webhook from GitHub', {
+        projectId: id,
+        repoName: project.repoName,
+        webhookUrl,
+      });
+
+      try {
+        await githubService.unregisterWebhook(project.user.githubToken, project.repoName, webhookUrl);
+        logger.debug('Webhook unregistered from GitHub', { projectId: id });
+      } catch (unregisterError) {
+        logger.warn('Failed to unregister webhook from GitHub:', {
+          error: unregisterError instanceof Error ? unregisterError.message : String(unregisterError),
+          projectId: id,
+        });
+      }
+
+      const [updated] = await db
+        .update(projects)
+        .set({
+          webhookEnabled: false,
+          webhookSecret: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(projects.id, id))
+        .returning();
+
+      logger.info('Webhook disabled successfully', {
+        projectId: id,
+        repoName: project.repoName,
+        userId,
+      });
+
+      res.json({
+        webhookEnabled: updated?.webhookEnabled ?? false,
+      });
+    } catch (error) {
+      logger.error('Failed to disable webhook:', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        projectId: id,
+        userId,
+      });
+      res.status(500).json({
+        error: 'Internal Server Error',
+        message: 'Failed to disable webhook',
       });
     }
   }

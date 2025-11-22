@@ -21,11 +21,13 @@ const statusVariantMap: Record<string, 'default' | 'success' | 'warning' | 'dest
   uploading: 'warning',
   updating_ens: 'warning',
   cloning: 'warning',
+  pending_build: 'warning',
+  pending_upload: 'warning',
   cancelled: 'default',
 }
 
-const RESUMABLE_STATUSES = new Set(['failed', 'uploading', 'updating_ens'])
-const ACTIVE_STATUSES = new Set(['cloning', 'building', 'uploading', 'updating_ens'])
+const RESUMABLE_STATUSES = new Set(['failed', 'pending_upload', 'uploading', 'updating_ens'])
+const ACTIVE_STATUSES = new Set(['pending_build', 'cloning', 'building', 'pending_upload', 'uploading', 'updating_ens'])
 
 export function ProjectCard({ project, onChange }: ProjectCardProps) {
   const navigate = useNavigate()
@@ -121,9 +123,29 @@ export function ProjectCard({ project, onChange }: ProjectCardProps) {
         <div className="space-y-2 rounded-xl bg-card/50 p-4 shadow-neo-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Latest Deployment</p>
           {latestDeployment ? (
-            <Badge variant={statusVariantMap[latestDeployment.status] ?? 'outline'} className="capitalize">
-              {latestDeployment.status.replace('_', ' ')}
-            </Badge>
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant={statusVariantMap[latestDeployment.status] ?? 'outline'} className="capitalize">
+                  {latestDeployment.status.replace('_', ' ')}
+                </Badge>
+                {latestDeployment.triggeredBy ? (
+                  <Badge variant="outline" className="uppercase tracking-wide text-[10px]">
+                    {latestDeployment.triggeredBy === 'webhook' ? 'Auto' : 'Manual'}
+                  </Badge>
+                ) : null}
+              </div>
+              {latestDeployment.commitSha ? (
+                <a
+                  href={`${project.repoUrl}/commit/${latestDeployment.commitSha}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block text-xs font-semibold text-cyan underline-offset-4 hover:underline"
+                >
+                  {latestDeployment.commitSha.slice(0, 7)} –{' '}
+                  {latestDeployment.commitMessage ? `${latestDeployment.commitMessage.slice(0, 40)}${latestDeployment.commitMessage.length > 40 ? '…' : ''}` : 'View commit'}
+                </a>
+              ) : null}
+            </div>
           ) : (
             <p className="text-sm font-bold text-muted-foreground">Never deployed</p>
           )}

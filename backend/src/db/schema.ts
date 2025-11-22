@@ -19,11 +19,14 @@ export const projects = sqliteTable('projects', {
   repoName: text('repo_name').notNull(),
   repoUrl: text('repo_url').notNull(),
   repoBranch: text('repo_branch').notNull().default('main'),
+  autoDeployBranch: text('auto_deploy_branch').notNull().default('main'),
   ensName: text('ens_name').notNull(),
   ensPrivateKey: text('ens_private_key').notNull(), // encrypted
   ethereumRpcUrl: text('ethereum_rpc_url').notNull(),
   buildCommand: text('build_command'),
   outputDir: text('output_dir'),
+  webhookEnabled: integer('webhook_enabled', { mode: 'boolean' }).notNull().default(false),
+  webhookSecret: text('webhook_secret'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
 });
@@ -31,11 +34,15 @@ export const projects = sqliteTable('projects', {
 export const deployments = sqliteTable('deployments', {
   id: text('id').primaryKey(),
   projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
-  status: text('status').notNull(), // 'cloning' | 'building' | 'uploading' | 'updating_ens' | 'success' | 'failed'
+  status: text('status').notNull(), // includes pending_build & pending_upload states
+  triggeredBy: text('triggered_by'),
+  commitSha: text('commit_sha'),
+  commitMessage: text('commit_message'),
   buildLog: text('build_log'),
   ipfsCid: text('ipfs_cid'),
   ensTxHash: text('ens_tx_hash'),
   errorMessage: text('error_message'),
+  buildArtifactsPath: text('build_artifacts_path'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   completedAt: integer('completed_at', { mode: 'timestamp' }),
 });

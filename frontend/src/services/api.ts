@@ -1,10 +1,16 @@
 import axios from 'axios'
 
-const DEFAULT_API_BASE_URL = 'http://localhost:3000/api'
+const DEFAULT_BACKEND_BASE_URL = import.meta.env.VITE_BACKEND_URL
 const unauthorizedListeners = new Set<() => void>()
 
+function getBackendBaseUrl() {
+  const configured = import.meta.env.VITE_BACKEND_URL
+  const base = configured && configured.length > 0 ? configured : DEFAULT_BACKEND_BASE_URL
+  return base.replace(/\/+$/, '')
+}
+
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL?.replace(/\/$/, '') ?? DEFAULT_API_BASE_URL,
+  baseURL: `${getBackendBaseUrl()}/api`,
   withCredentials: true,
   timeout: 30_000,
   headers: {

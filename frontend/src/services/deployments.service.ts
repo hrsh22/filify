@@ -18,9 +18,18 @@ export const deploymentsService = {
     const { data } = await api.get<Deployment[]>(`/projects/${projectId}/deployments`)
     return data
   },
+  async list(params?: { status?: string; limit?: number }) {
+    const { data } = await api.get<Deployment[]>('/deployments', {
+      params,
+    })
+    return data
+  },
   async updateEns(id: string, ipfsCid: string) {
     const { data } = await api.post<{ status: string; message: string }>(`/deployments/${id}/ens`, { ipfsCid })
     return data
+  },
+  async markUploadFailed(id: string, message?: string) {
+    await api.post(`/deployments/${id}/upload/fail`, { message })
   },
   async cancel(id: string) {
     const { data } = await api.post<{ status: string; killed: boolean }>(`/deployments/${id}/cancel`)
