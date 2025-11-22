@@ -1,3 +1,4 @@
+import { useDisconnect } from '@reown/appkit/react'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { User } from '@/types'
 import { authService } from '@/services/auth.service'
@@ -16,6 +17,7 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const { disconnect } = useDisconnect()
 
   const checkAuth = useCallback(async () => {
     try {
@@ -31,8 +33,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     await authService.logout()
+    await disconnect()
     setUser(null)
-  }, [])
+  }, [disconnect])
 
   const login = useCallback(() => {
     authService.login()

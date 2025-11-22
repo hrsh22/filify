@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Avatar } from '@/components/ui/avatar'
 import { useAuth } from '@/context/auth-context'
 import { SignOutButton } from '@/components/auth/sign-out-button'
+import { WalletConnectButton } from '@/components/auth/wallet-connect-button'
 
 const navItems = [
   { to: '/dashboard', label: 'Dashboard' },
@@ -42,6 +43,7 @@ export function AppHeader() {
         <div className="flex items-center gap-4">
           {user ? (
             <>
+              <WalletConnectButton size="sm" variant="outline" className="hidden md:inline-flex" />
               <span className="hidden rounded-lg bg-card px-5 py-2.5 text-sm font-semibold text-foreground shadow-neo-sm md:inline-flex">
                 {user.githubUsername}
               </span>

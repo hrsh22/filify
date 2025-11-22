@@ -1,9 +1,11 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAppKitAccount } from '@reown/appkit/react'
 import { Github, Globe, Rocket, ShieldCheck, Workflow, Zap, CheckCircle2, ArrowRight, Sparkles } from 'lucide-react'
 import { SignInButton } from '@/components/auth/sign-in-button'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/context/auth-context'
+import { WalletConnectButton } from '@/components/auth/wallet-connect-button'
 
 const steps = [
   { icon: Github, title: 'Connect GitHub', description: 'Authorize Filify to access your repositories securely.', color: 'text-primary' },
@@ -22,6 +24,7 @@ const features = [
 export function LandingPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { isConnected } = useAppKitAccount()
 
   useEffect(() => {
     if (user) {
@@ -50,11 +53,12 @@ export function LandingPage() {
               Filify gives you a Vercel-like dashboard powered by Filecoin storage and ENS domains. Connect GitHub, pick a repo, and launch in minutes.
             </p>
             <div className="flex flex-wrap gap-4">
+              <WalletConnectButton size="lg" className="min-w-[220px] shadow-neo hover:shadow-neo-lg" />
               <SignInButton size="lg" className="min-w-[220px] shadow-neo hover:shadow-neo-lg" />
-              <Button 
-                size="lg" 
-                variant="outline" 
-                onClick={() => navigate('/dashboard')} 
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={() => navigate('/dashboard')}
                 disabled={!user}
                 className="min-w-[180px]"
               >
@@ -62,6 +66,9 @@ export function LandingPage() {
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </div>
+            <p className="text-sm font-semibold text-muted-foreground">
+              {isConnected ? 'Wallet connected — continue with GitHub to unlock the dashboard.' : 'Step 1 · Connect your wallet to enable GitHub sign-in.'}
+            </p>
             <p className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-cyan" />
               Built for builders who care about permanence, provenance, and ownership.
@@ -126,7 +133,17 @@ export function LandingPage() {
             <p className="text-lg text-black/80">
               Join developers building on the decentralized web with Filecoin and ENS.
             </p>
-            <SignInButton size="lg" variant="secondary" className="min-w-[240px] bg-black text-white hover:bg-black/90 shadow-neo border-black" />
+            <div className="flex flex-wrap items-center justify-center gap-4">
+              <WalletConnectButton
+                size="lg"
+                className="min-w-[220px] bg-black text-white hover:bg-black/90 shadow-neo border-black"
+              />
+              <SignInButton
+                size="lg"
+                variant="secondary"
+                className="min-w-[240px] bg-black text-white hover:bg-black/90 shadow-neo border-black"
+              />
+            </div>
           </div>
         </section>
       </div>

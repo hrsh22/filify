@@ -24,14 +24,15 @@ Filify is a decentralized deployment platform that enables developers to deploy 
 
 ### Core Workflow
 
-1. User authenticates via GitHub OAuth
-2. User creates a project linking a GitHub repository, ENS settings, and choosing an auto-deploy branch while the GitHub webhook is registered automatically
-3. Manual deployments can be triggered from the dashboard/project page
-4. Auto-deployments fire when GitHub sends a push webhook; the backend enqueues a build job per project
-5. Backend clones the repository, builds it, and stores build artifacts for up to 24h
-6. The frontend auto-deploy poller downloads pending artifacts, uploads them to Filecoin via `filecoin-pin`, and receives an IPFS CID
-7. Backend updates the ENS contenthash with the new CID
-8. Deployment is accessible via ENS domain and pinned on Filecoin/IPFS
+1. User connects their Ethereum wallet on mainnet via Reown AppKit (WalletConnect) inside the frontend.
+2. Once a wallet is connected, the user authenticates via GitHub OAuth (GitHub login is disabled until a wallet connection exists).
+3. User creates a project linking a GitHub repository, ENS settings, and choosing an auto-deploy branch while the GitHub webhook is registered automatically
+4. Manual deployments can be triggered from the dashboard/project page
+5. Auto-deployments fire when GitHub sends a push webhook; the backend enqueues a build job per project
+6. Backend clones the repository, builds it, and stores build artifacts for up to 24h
+7. The frontend auto-deploy poller downloads pending artifacts, uploads them to Filecoin via `filecoin-pin`, and receives an IPFS CID
+8. Backend updates the ENS contenthash with the new CID
+9. Deployment is accessible via ENS domain and pinned on Filecoin/IPFS
 
 ---
 
@@ -67,6 +68,7 @@ Filify is a decentralized deployment platform that enables developers to deploy 
 **Key Features**:
 
 - GitHub OAuth authentication flow
+- Ethereum wallet connection via Reown AppKit (WalletConnect) limited to mainnet
 - Project creation and management
 - Real-time deployment status tracking
 - Filecoin upload with progress monitoring
@@ -131,11 +133,12 @@ Filify is a decentralized deployment platform that enables developers to deploy 
 
 ### Authentication
 
-- **Method**: GitHub OAuth 2.0
+- **Method**: Dual flow — Ethereum wallet connection via Reown AppKit (WalletConnect on mainnet) plus GitHub OAuth 2.0
 - **Session Storage**: SQLite (sessions table)
+- **Wallet Stack**: `@reown/appkit`, `@reown/appkit-adapter-wagmi`, `wagmi`, and React Query for provider state
 - **Security**: Encrypted tokens, httpOnly cookies
 
-**Current State**: GitHub OAuth 2.0 flow fully implemented. Users authenticate via GitHub, tokens are encrypted and stored. Sessions managed via SQLite with 7-day expiration. Protected routes enforce authentication.
+**Current State**: Users must connect an Ethereum wallet before the GitHub login button becomes active. Wallet status is managed globally through the AppKit/Wagmi provider, and ProtectedRoute now enforces that both a wallet connection and a GitHub session exist before rendering any dashboard routes. Logging out also disconnects the wallet to keep both auth states aligned.
 
 ### Project Management
 
@@ -255,6 +258,7 @@ pending_build → cloning → building → pending_upload → uploading → upda
 
 ### Frontend Environment Variables
 
+- `VITE_REOWN_PROJECT_ID` - Reown AppKit project ID for wallet connectivity (required)
 - `VITE_API_URL` - Backend API URL
 - `VITE_WALLET_ADDRESS` - Filecoin wallet address
 - `VITE_SESSION_KEY` - Session key for filecoin-pin
@@ -283,8 +287,9 @@ pending_build → cloning → building → pending_upload → uploading → upda
 - Runs on Filecoin Calibration testnet (not mainnet)
 - Session key-based authentication (not production-ready for multi-user)
 - SQLite database (consider PostgreSQL for production)
-- No "bring your own wallet" support yet
+- Filecoin uploads still rely on the shared session wallet (wallet connect is only used for dashboard access control)
 - Build artifacts stored temporarily in the repo-level `builds/` folder (cleaned after ~24h)
+- Wallet connection is limited to Ethereum mainnet via Reown AppKit (no Solana/multichain toggle yet)
 
 ### Known Issues
 
@@ -355,6 +360,8 @@ Failed deployments can be resumed from previous builds:
 
 - `react` ^19.2.0
 - `react-router-dom` ^7.0.2
+- `@reown/appkit` + `@reown/appkit-adapter-wagmi` + `wagmi` for wallet connectivity
+- `@tanstack/react-query` for Wagmi/AppKit provider state
 - `filecoin-pin` ^0.12.0
 - `axios` ^1.7.9
 - `zod` ^3.23.8

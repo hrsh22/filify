@@ -4,7 +4,12 @@ This document lists all environment variables for the frontend React application
 
 ## Required Environment Variables
 
-### Filecoin Pin Configuration
+### Wallet & Filecoin Configuration
+
+- **`VITE_REOWN_PROJECT_ID`** (required)
+    - Project ID created in the [Reown Dashboard](https://dashboard.reown.com)
+    - Used by AppKit to initialize the WalletConnect modal
+    - Example: `VITE_REOWN_PROJECT_ID=1234567890abcdef`
 
 - **`VITE_FILECOIN_PRIVATE_KEY`** (required)
     - Filecoin wallet private key for authentication
@@ -51,6 +56,7 @@ Create a `.env.local` file in the `frontend/` directory:
 
 ```env
 # Required
+VITE_REOWN_PROJECT_ID=1234567890abcdef
 VITE_FILECOIN_PRIVATE_KEY=0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
 
 # Optional - API Configuration

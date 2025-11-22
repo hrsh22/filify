@@ -11,6 +11,7 @@ interface ImportMetaEnv {
   readonly VITE_DEFAULT_ETHEREUM_RPC?: string
   readonly VITE_FILECOIN_PIN_API?: string
   readonly VITE_FILECOIN_PRIVATE_KEY?: string
+  readonly VITE_REOWN_PROJECT_ID?: string
   readonly VITE_WALLET_ADDRESS?: string
   readonly VITE_SESSION_KEY?: string
   readonly VITE_FILECOIN_RPC_URL?: string

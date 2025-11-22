@@ -8,6 +8,7 @@ import { FilecoinPinProvider } from './context/filecoin-pin-provider'
 import { AuthProvider } from './context/auth-context'
 import { ToastProvider } from './context/toast-context'
 import { ErrorBoundary } from './components/error-boundary'
+import { WalletProvider } from './context/wallet-provider'
 
 const root = document.getElementById('root')
 
@@ -18,16 +19,18 @@ if (!root) {
 createRoot(root).render(
   <StrictMode>
     <BrowserRouter>
-      <FilecoinPinProvider>
-        <AuthProvider>
-          <ToastProvider>
-            <ErrorBoundary>
-              <App />
-            </ErrorBoundary>
-            <Toaster position="bottom-right" richColors />
-          </ToastProvider>
-        </AuthProvider>
-      </FilecoinPinProvider>
+      <WalletProvider>
+        <FilecoinPinProvider>
+          <AuthProvider>
+            <ToastProvider>
+              <ErrorBoundary>
+                <App />
+              </ErrorBoundary>
+              <Toaster position="bottom-right" richColors />
+            </ToastProvider>
+          </AuthProvider>
+        </FilecoinPinProvider>
+      </WalletProvider>
     </BrowserRouter>
   </StrictMode>
 )
