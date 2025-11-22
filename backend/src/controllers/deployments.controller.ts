@@ -12,15 +12,30 @@ import { getDeploymentBuildDir } from '../utils/paths';
 import { deploymentQueue } from '../services/deployment-queue.service';
 
 export class DeploymentsController {
-    private static readonly RESUMABLE_STATUSES = new Set(['failed', 'pending_upload', 'uploading', 'updating_ens']);
-    private static readonly ACTIVE_STATUSES = ['pending_build', 'cloning', 'building', 'pending_upload', 'uploading', 'updating_ens'];
+    private static readonly RESUMABLE_STATUSES = new Set([
+        'failed',
+        'pending_upload',
+        'uploading',
+        'awaiting_signature',
+        'awaiting_confirmation',
+    ]);
+    private static readonly ACTIVE_STATUSES = [
+        'pending_build',
+        'cloning',
+        'building',
+        'pending_upload',
+        'uploading',
+        'awaiting_signature',
+        'awaiting_confirmation',
+    ];
     private static readonly KNOWN_STATUSES = new Set([
         'pending_build',
         'cloning',
         'building',
         'pending_upload',
         'uploading',
-        'updating_ens',
+        'awaiting_signature',
+        'awaiting_confirmation',
         'success',
         'failed',
         'cancelled',
@@ -230,20 +245,19 @@ export class DeploymentsController {
         }
     }
 
-    // Update ENS with IPFS CID (called by frontend after upload)
-    async updateENS(req: Request, res: Response) {
+    // Prepare ENS transaction payload after Filecoin upload completes
+    async prepareENS(req: Request, res: Response) {
         const { id } = req.params;
         const { ipfsCid } = req.body;
         const userId = (req.user as any).id;
 
-        logger.info('ENS update requested', {
+        logger.info('Preparing ENS transaction', {
             deploymentId: id,
             ipfsCid,
             userId,
         });
 
         try {
-            // Get deployment and verify ownership
             const deployment = await db.query.deployments.findFirst({
                 where: eq(deployments.id, id),
                 with: {
@@ -260,47 +274,145 @@ export class DeploymentsController {
                 });
             }
 
-            if (deployment.status !== 'pending_upload' && deployment.status !== 'uploading') {
+            if (!deployment.project.ensOwnerAddress) {
                 return res.status(400).json({
-                    error: 'InvalidState',
-                    message: 'Deployment is not awaiting upload.',
+                    error: 'MissingOwner',
+                    message: 'Project is missing the ENS owner address required to sign transactions.',
                 });
             }
 
-            // Update deployment with CID
+            if (!['pending_upload', 'uploading', 'awaiting_signature'].includes(deployment.status)) {
+                return res.status(400).json({
+                    error: 'InvalidState',
+                    message: 'Deployment is not ready for ENS preparation.',
+                });
+            }
+
+            const payload = await ensService.prepareContenthashTx(
+                deployment.project.ensName,
+                deployment.project.ensOwnerAddress,
+                ipfsCid,
+                deployment.project.ethereumRpcUrl
+            );
+
             await db
                 .update(deployments)
                 .set({
                     ipfsCid,
-                    status: 'updating_ens',
+                    status: 'awaiting_signature',
                     buildArtifactsPath: null,
                 })
                 .where(eq(deployments.id, id));
 
-            logger.info('Deployment status updated to updating_ens, starting ENS update', {
+            logger.info('ENS transaction prepared and awaiting signature', {
                 deploymentId: id,
-                ipfsCid,
                 ensName: deployment.project.ensName,
             });
 
-            // Update ENS contenthash
-            this.executeENSUpdate(id, deployment.project, ipfsCid).catch((error) => {
-                logger.error(`ENS update failed for deployment ${id}:`, {
-                    error: error instanceof Error ? error.message : String(error),
-                    stack: error instanceof Error ? error.stack : undefined,
-                    deploymentId: id,
-                });
-            });
-
             res.json({
-                message: 'ENS update started',
-                status: 'updating_ens',
+                status: 'awaiting_signature',
+                payload,
             });
         } catch (error) {
-            logger.error('Failed to update ENS:', error);
+            logger.error('Failed to prepare ENS transaction:', error);
             res.status(500).json({
                 error: 'Internal Server Error',
-                message: 'Failed to update ENS',
+                message: 'Failed to prepare ENS payload',
+            });
+        }
+    }
+
+    // Confirm ENS transaction after the wallet signs & broadcasts it
+    async confirmENS(req: Request, res: Response) {
+        const { id } = req.params;
+        const { txHash } = req.body;
+        const userId = (req.user as any).id;
+
+        logger.info('Confirming ENS transaction', {
+            deploymentId: id,
+            txHash,
+            userId,
+        });
+
+        try {
+            const deployment = await db.query.deployments.findFirst({
+                where: eq(deployments.id, id),
+                with: {
+                    project: {
+                        with: { user: true },
+                    },
+                },
+            });
+
+            if (!deployment || deployment.project.userId !== userId) {
+                return res.status(403).json({
+                    error: 'Forbidden',
+                    message: 'You do not have access to this deployment',
+                });
+            }
+
+            if (!deployment.ipfsCid) {
+                return res.status(400).json({
+                    error: 'MissingCid',
+                    message: 'IPFS CID missing. Prepare the ENS transaction before confirming.',
+                });
+            }
+
+            if (!['awaiting_signature', 'awaiting_confirmation'].includes(deployment.status)) {
+                return res.status(400).json({
+                    error: 'InvalidState',
+                    message: 'Deployment is not awaiting ENS confirmation.',
+                });
+            }
+
+            await db
+                .update(deployments)
+                .set({
+                    status: 'awaiting_confirmation',
+                    ensTxHash: txHash,
+                })
+                .where(eq(deployments.id, id));
+
+            const result = await ensService.waitForTransaction({
+                ensName: deployment.project.ensName,
+                txHash,
+                expectedCid: deployment.ipfsCid,
+                rpcUrl: deployment.project.ethereumRpcUrl,
+            });
+
+            await db
+                .update(deployments)
+                .set({
+                    status: 'success',
+                    ensTxHash: txHash,
+                    buildArtifactsPath: null,
+                    completedAt: new Date(),
+                })
+                .where(eq(deployments.id, id));
+
+            res.json({
+                status: 'success',
+                txHash: result.txHash,
+                verified: result.verified,
+                blockNumber: result.blockNumber,
+            });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to confirm ENS transaction';
+            logger.error('ENS confirmation failed:', error);
+
+            await db
+                .update(deployments)
+                .set({
+                    status: 'failed',
+                    errorMessage: `ENS confirmation failed: ${message}`,
+                    buildArtifactsPath: null,
+                    completedAt: new Date(),
+                })
+                .where(eq(deployments.id, id));
+
+            res.status(500).json({
+                error: 'ENSConfirmationFailed',
+                message,
             });
         }
     }
@@ -680,44 +792,6 @@ export class DeploymentsController {
         }
     }
 
-    // Private method: Execute ENS update
-    private async executeENSUpdate(deploymentId: string, project: any, ipfsCid: string) {
-        try {
-            logger.info(`Updating ENS for deployment ${deploymentId}`);
-
-            const result = await ensService.updateContentHash(
-                project.ensName,
-                project.ensPrivateKey,
-                ipfsCid,
-                project.ethereumRpcUrl
-            );
-
-            await db
-                .update(deployments)
-                .set({
-                    status: 'success',
-                    ensTxHash: result.txHash,
-                    buildArtifactsPath: null,
-                    completedAt: new Date(),
-                })
-                .where(eq(deployments.id, deploymentId));
-
-            logger.info(`ENS updated successfully for deployment ${deploymentId}`);
-            logger.info(`Transaction hash: ${result.txHash}`);
-        } catch (error) {
-            logger.error(`ENS update failed for deployment ${deploymentId}:`, error);
-
-            await db
-                .update(deployments)
-                .set({
-                    status: 'failed',
-                    errorMessage: `ENS update failed: ${(error as Error).message}`,
-                    buildArtifactsPath: null,
-                    completedAt: new Date(),
-                })
-                .where(eq(deployments.id, deploymentId));
-        }
-    }
 }
 
 export const deploymentsController = new DeploymentsController();

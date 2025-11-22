@@ -1,7 +1,16 @@
 import { Check, Loader2, GitBranch, Hammer, Upload, Globe, CheckCircle, XCircle, AlertCircle, Clock } from 'lucide-react'
 import type { DeploymentStatus } from '@/types'
 
-const order: DeploymentStatus[] = ['pending_build', 'cloning', 'building', 'pending_upload', 'uploading', 'updating_ens', 'success']
+const order: DeploymentStatus[] = [
+  'pending_build',
+  'cloning',
+  'building',
+  'pending_upload',
+  'uploading',
+  'awaiting_signature',
+  'awaiting_confirmation',
+  'success',
+]
 
 function getStepState(current: DeploymentStatus, step: DeploymentStatus) {
   const currentIndex = order.indexOf(current)
@@ -23,7 +32,8 @@ const labelMap: Record<DeploymentStatus, string> = {
   building: 'Building project',
   pending_upload: 'Waiting for upload',
   uploading: 'Uploading to Filecoin',
-  updating_ens: 'Updating ENS',
+  awaiting_signature: 'Waiting for ENS signature',
+  awaiting_confirmation: 'Awaiting confirmation',
   success: 'Completed',
   failed: 'Failed',
   cancelled: 'Cancelled',
@@ -35,7 +45,8 @@ const stepIcons: Record<string, React.ComponentType<{ className?: string }>> = {
   building: Hammer,
   pending_upload: Upload,
   uploading: Upload,
-  updating_ens: Globe,
+  awaiting_signature: Globe,
+  awaiting_confirmation: Clock,
   success: CheckCircle,
 }
 

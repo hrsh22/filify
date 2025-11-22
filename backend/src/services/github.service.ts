@@ -102,9 +102,22 @@ class GitHubService {
 
         const existing = await this.findWebhookByUrl(octokit, owner, repo, webhookUrl);
         if (existing) {
-            logger.info('Webhook already exists, reusing', {
+            logger.info('Webhook already exists, updating secret/config', {
                 repoFullName,
                 webhookId: existing.id,
+            });
+            await octokit.repos.updateWebhook({
+                owner,
+                repo,
+                hook_id: existing.id,
+                active: true,
+                events: existing.events ?? ['push'],
+                config: {
+                    url: webhookUrl,
+                    content_type: 'json',
+                    secret,
+                    insecure_ssl: '0',
+                },
             });
             return existing.id;
         }

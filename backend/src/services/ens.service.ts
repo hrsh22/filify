@@ -1,7 +1,6 @@
 import { ethers } from 'ethers';
 import contentHash from 'content-hash';
 import { logger } from '../utils/logger';
-import { encryptionService } from './encryption.service';
 
 type CidModule = typeof import('multiformats/cid');
 type Base58Module = typeof import('multiformats/bases/base58');
@@ -23,10 +22,21 @@ async function loadBase58Module(): Promise<Base58Module> {
     return base58ModulePromise;
 }
 
-interface ENSUpdateResult {
+interface PreparedENSTransaction {
+    resolverAddress: string;
+    data: string;
+    chainId: number;
+    rpcUrl: string;
+    encodedContenthash: string;
+    normalizedCid: string;
+    gasEstimate?: string | null;
+}
+
+interface ENSConfirmationResult {
     txHash: string;
     blockNumber: number;
-    gasUsed: string;
+    gasUsed: string | null;
+    verified: boolean;
 }
 
 class ENSService {
@@ -56,98 +66,119 @@ class ENSService {
             );
         }
     }
-    async updateContentHash(
+    async prepareContenthashTx(
         ensName: string,
-        encryptedPrivateKey: string,
+        ownerAddress: string,
         ipfsCid: string,
         rpcUrl: string
-    ): Promise<ENSUpdateResult> {
+    ): Promise<PreparedENSTransaction> {
         try {
-            // Decrypt private key
-            const privateKey = encryptionService.decrypt(encryptedPrivateKey);
-
-            // Connect to provider
-            const provider = new ethers.JsonRpcProvider(rpcUrl);
-            const wallet = new ethers.Wallet(privateKey, provider);
-
-            logger.info(`Updating ENS contenthash for ${ensName}`);
-            logger.info(`Wallet address: ${wallet.address}`);
-            logger.info(`Original IPFS CID: ${ipfsCid}`);
-
+            const normalizedOwner = ethers.getAddress(ownerAddress);
             const normalizedCid = await this.normalizeIpfsCid(ipfsCid);
+            const provider = new ethers.JsonRpcProvider(rpcUrl);
+
+            logger.info(`Preparing ENS contenthash transaction for ${ensName}`);
+            logger.info(`Owner address: ${normalizedOwner}`);
             logger.info(`Normalized IPFS CID (base58btc): ${normalizedCid}`);
 
-            // Encode IPFS CID to contenthash format (EIP-1577)
-            const encoded = `0x${contentHash.encode('ipfs-ns', normalizedCid)}`;
-            logger.info(`Encoded contenthash: ${encoded}`);
-
-            // Get ENS registry and resolver
             const resolver = await provider.getResolver(ensName);
 
-            if (!resolver) {
+            if (!resolver?.address) {
                 throw new Error(
                     `ENS resolver not found for ${ensName}. Ensure the domain is registered and configured.`
                 );
             }
 
-            // Get the namehash
             const node = ethers.namehash(ensName);
-
-            // Create resolver contract interface
+            const encoded = `0x${contentHash.encode('ipfs-ns', normalizedCid)}`;
             const resolverInterface = new ethers.Interface([
                 'function setContenthash(bytes32 node, bytes calldata hash) external',
             ]);
-
-            // Encode the transaction data
             const data = resolverInterface.encodeFunctionData('setContenthash', [node, encoded]);
 
-            const resolverAddress = resolver.address;
-            if (!resolverAddress) {
-                throw new Error('Resolver address not found in provider response');
+            let gasEstimate: string | null = null;
+            try {
+                const estimate = await provider.estimateGas({
+                    to: resolver.address,
+                    from: normalizedOwner,
+                    data,
+                });
+                gasEstimate = estimate.toString();
+            } catch (gasError) {
+                logger.warn('Failed to estimate ENS gas usage', {
+                    ensName,
+                    error: gasError instanceof Error ? gasError.message : String(gasError),
+                });
             }
 
-            // Send transaction to the resolver contract (NOT the name's resolved address)
-            const tx = await wallet.sendTransaction({
-                to: resolverAddress,
-                data,
+            const network = await provider.getNetwork();
+
+            logger.info(`ENS transaction prepared`, {
+                ensName,
+                resolver: resolver.address,
+                chainId: Number(network.chainId),
             });
 
-            logger.info(`Transaction sent: ${tx.hash}`);
-            logger.info(`Waiting for confirmation...`);
-
-            // Wait for transaction confirmation
-            const receipt = await tx.wait();
-
-            if (!receipt) {
-                throw new Error('Transaction receipt not found');
-            }
-
-            logger.info(`✓ ENS contenthash updated successfully`);
-            logger.info(`Block number: ${receipt.blockNumber}`);
-            logger.info(`Gas used: ${receipt.gasUsed.toString()}`);
-
-            try {
-                const verified = await this.verifyContentHash(ensName, normalizedCid, rpcUrl);
-                logger.info(`Post-update ENS verification ${verified ? 'succeeded' : 'failed'}`);
-            } catch (verificationError) {
-                logger.warn(
-                    `ENS verification skipped due to error: ${(verificationError as Error).message}`
-                );
-            }
-
             return {
-                txHash: receipt.hash,
-                blockNumber: receipt.blockNumber,
-                gasUsed: receipt.gasUsed.toString(),
+                resolverAddress: resolver.address,
+                data,
+                chainId: Number(network.chainId),
+                rpcUrl,
+                encodedContenthash: encoded,
+                normalizedCid,
+                gasEstimate,
             };
         } catch (error) {
-            logger.error('ENS update failed:', {
+            logger.error('ENS transaction preparation failed:', {
                 error: error instanceof Error ? error.message : String(error),
                 stack: error instanceof Error ? error.stack : undefined,
                 ensName,
                 ipfsCid,
             });
-            throw new Error(`Failed to update ENS contenthash: ${(error as Error).message}`);
+            throw new Error(`Failed to prepare ENS transaction: ${(error as Error).message}`);
+        }
+    }
+
+    async waitForTransaction(params: {
+        ensName: string;
+        txHash: string;
+        expectedCid: string;
+        rpcUrl: string;
+    }): Promise<ENSConfirmationResult> {
+        const { ensName, txHash, expectedCid, rpcUrl } = params;
+        try {
+            logger.info(`Waiting for ENS transaction ${txHash}`, { ensName });
+            const provider = new ethers.JsonRpcProvider(rpcUrl);
+            const receipt = await provider.waitForTransaction(txHash);
+
+            if (!receipt) {
+                throw new Error('Transaction receipt not found');
+            }
+
+            const normalizedCid = await this.normalizeIpfsCid(expectedCid);
+            const verified = await this.verifyContentHash(ensName, normalizedCid, rpcUrl);
+
+            logger.info(`ENS transaction confirmed`, {
+                ensName,
+                txHash,
+                blockNumber: receipt.blockNumber,
+                verified,
+            });
+
+            return {
+                txHash: receipt.hash,
+                blockNumber: receipt.blockNumber,
+                gasUsed: receipt.gasUsed ? receipt.gasUsed.toString() : null,
+                verified,
+            };
+        } catch (error) {
+            logger.error('ENS confirmation failed:', {
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+                ensName,
+                txHash,
+            });
+            throw new Error(`Failed to confirm ENS transaction: ${(error as Error).message}`);
         }
     }
 

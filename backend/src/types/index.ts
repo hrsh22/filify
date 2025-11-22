@@ -1,10 +1,14 @@
 export type DeploymentStatus =
+  | 'pending_build'
   | 'cloning'
   | 'building'
+  | 'pending_upload'
   | 'uploading'
-  | 'updating_ens'
+  | 'awaiting_signature'
+  | 'awaiting_confirmation'
   | 'success'
-  | 'failed';
+  | 'failed'
+  | 'cancelled';
 
 
 

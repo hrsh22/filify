@@ -7,7 +7,7 @@ export const createProjectSchema = z.object({
         repoUrl: z.string().url(),
         repoBranch: z.string().optional().default('main'),
         ensName: z.string().regex(/^[a-z0-9-]+\.eth$/, 'Invalid ENS name format'),
-        ensPrivateKey: z.string().regex(/^0x[a-fA-F0-9]{64}$/, 'Invalid private key format'),
+        ensOwnerAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/, 'Invalid Ethereum address'),
         ethereumRpcUrl: z.string().url(),
         buildCommand: z.string().optional(),
         outputDir: z.string().optional(),
@@ -20,7 +20,7 @@ export const updateProjectSchema = z.object({
         repoBranch: z.string().optional(),
         autoDeployBranch: z.string().optional(),
         ensName: z.string().regex(/^[a-z0-9-]+\.eth$/).optional(),
-        ensPrivateKey: z.string().regex(/^0x[a-fA-F0-9]{64}$/).optional(),
+        ensOwnerAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
         ethereumRpcUrl: z.string().url().optional(),
         buildCommand: z.string().optional(),
         outputDir: z.string().optional(),
@@ -49,9 +49,15 @@ export const createDeploymentSchema = z.object({
     }),
 });
 
-export const updateENSSchema = z.object({
+export const prepareENSSchema = z.object({
     body: z.object({
         ipfsCid: z.string().regex(/^bafy[a-z0-9]{52,}$/, 'Invalid IPFS CID format'),
+    }),
+});
+
+export const confirmENSSchema = z.object({
+    body: z.object({
+        txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/, 'Invalid transaction hash'),
     }),
 });
 

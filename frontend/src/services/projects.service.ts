@@ -7,7 +7,7 @@ type CreateProjectPayload = {
   repoUrl: string
   repoBranch: string
   ensName: string
-  ensPrivateKey: string
+  ensOwnerAddress: string
   ethereumRpcUrl: string
   buildCommand?: string
   outputDir?: string

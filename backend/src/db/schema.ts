@@ -21,7 +21,7 @@ export const projects = sqliteTable('projects', {
   repoBranch: text('repo_branch').notNull().default('main'),
   autoDeployBranch: text('auto_deploy_branch').notNull().default('main'),
   ensName: text('ens_name').notNull(),
-  ensPrivateKey: text('ens_private_key').notNull(), // encrypted
+  ensOwnerAddress: text('ens_owner_address').notNull(),
   ethereumRpcUrl: text('ethereum_rpc_url').notNull(),
   buildCommand: text('build_command'),
   outputDir: text('output_dir'),

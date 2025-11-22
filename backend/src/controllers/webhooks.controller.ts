@@ -1,13 +1,15 @@
 import { Request, Response } from 'express';
 import crypto from 'crypto';
 import { db } from '../db';
-import { projects, deployments } from '../db/schema';
+import { projects, deployments, users } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { webhookSecretService } from '../services/webhook-secret.service';
 import { logger } from '../utils/logger';
 import { generateId } from '../utils/generateId';
 import { deploymentQueue } from '../services/deployment-queue.service';
 import { deploymentsController } from './deployments.controller';
+import { githubService } from '../services/github.service';
+import { env } from '../config/env';
 
 type GithubPushPayload = {
     ref?: string;
@@ -20,7 +22,17 @@ type GithubPushPayload = {
     };
 };
 
+type ProjectWithUser = typeof projects.$inferSelect & {
+    user: typeof users.$inferSelect;
+};
+
+const WEBHOOK_ENDPOINT = '/api/webhooks/github';
+
 class WebhooksController {
+    private getWebhookUrl() {
+        return new URL(WEBHOOK_ENDPOINT, env.BACKEND_URL).toString();
+    }
+
     private verifySignature(secret: string, payload: Buffer, signatureHeader: string | undefined): boolean {
         if (!signatureHeader || !signatureHeader.startsWith('sha256=')) {
             return false;
@@ -35,6 +47,39 @@ class WebhooksController {
         }
 
         return crypto.timingSafeEqual(received, expected);
+    }
+
+    private async rotateWebhookSecret(project: ProjectWithUser) {
+        if (!project.user) {
+            logger.warn('Cannot rotate webhook secret: project user missing', { projectId: project.id });
+            return;
+    }
+
+        try {
+            const secretPlain = webhookSecretService.generate();
+            const encryptedSecret = webhookSecretService.encrypt(secretPlain);
+            const webhookUrl = this.getWebhookUrl();
+
+            await githubService.registerWebhook(project.user.githubToken, project.repoName, webhookUrl, secretPlain);
+
+            await db
+                .update(projects)
+                .set({
+                    webhookSecret: encryptedSecret,
+                    updatedAt: new Date(),
+                })
+                .where(eq(projects.id, project.id));
+
+            logger.info('Webhook secret rotated after invalid signature', {
+                projectId: project.id,
+                repoName: project.repoName,
+            });
+        } catch (error) {
+            logger.error('Failed to rotate webhook secret after invalid signature', {
+                projectId: project.id,
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
     }
 
     async handleGithubWebhook(req: Request, res: Response) {
@@ -90,7 +135,7 @@ class WebhooksController {
                 with: { user: true },
             });
 
-            if (!project || !project.webhookEnabled || !project.webhookSecret) {
+        if (!project || !project.webhookEnabled || !project.webhookSecret) {
                 logger.debug('Webhook ignored: project not found or webhook disabled', {
                     deliveryId,
                     repoFullName,
@@ -115,7 +160,11 @@ class WebhooksController {
                     deliveryId,
                     repoFullName,
                 });
-                return res.status(401).json({ error: 'InvalidSignature' });
+
+                // Attempt to rotate the webhook secret so the next delivery succeeds
+                await this.rotateWebhookSecret(project);
+
+                return res.status(202).json({ error: 'InvalidSignature', rotated: true });
             }
 
             logger.debug('Webhook signature verified', { projectId: project.id, deliveryId });

@@ -21,7 +21,7 @@ The platform consists of two main components:
 ### 🔐 Authentication & Security
 
 - **GitHub OAuth Integration** - Secure authentication using GitHub accounts
-- **Encrypted Storage** - All sensitive data (GitHub tokens, ENS private keys) are encrypted using AES-256-GCM
+- **Encrypted Storage** - All sensitive data (GitHub tokens, webhook secrets) are encrypted using AES-256-GCM
 - **Session Management** - Secure session handling with SQLite-backed sessions
 - **Rate Limiting** - API protection against abuse
 
@@ -75,7 +75,7 @@ graph TB
 ### Deployment Status Flow
 
 ```
-cloning → building → uploading → updating_ens → success/failed
+cloning → building → uploading → awaiting_signature → awaiting_confirmation → success/failed
 ```
 
 ### Tech Stack
@@ -308,8 +308,8 @@ See `backend/ENV.md` for detailed environment variable documentation.
 3. **Select a repository** from your GitHub repositories
 4. **Choose a branch** to deploy from
 5. **Configure ENS details**:
-    - ENS domain name (e.g., `mydomain.eth`)
-    - ENS private key (encrypted and stored securely)
+    - Pick an ENS domain owned by your connected wallet (auto-populated list)
+    - The wallet owner address is stored so future ENS transactions can be signed client-side
 6. **Set build configuration** (optional):
     - Build command (default: `npm run build`)
     - Output directory (auto-detected if not specified)
@@ -323,7 +323,8 @@ See `backend/ENV.md` for detailed environment variable documentation.
     - **Cloning**: Repository is being cloned
     - **Building**: Dependencies installed and project built
     - **Uploading**: Build artifacts uploaded to Filecoin
-    - **Updating ENS**: ENS contenthash updated with IPFS CID
+    - **Awaiting signature**: Wallet needs to sign the ENS resolver transaction
+    - **Awaiting confirmation**: Ethereum confirmation pending
     - **Success**: Deployment complete and accessible via ENS
 
 4. **View deployment details**:
@@ -366,7 +367,8 @@ If a deployment fails during the upload or ENS update phase, you can resume from
 
 - `POST /api/deployments` - Create new deployment (trigger build)
 - `GET /api/deployments/:id` - Get deployment status
-- `POST /api/deployments/:id/ens` - Update ENS with IPFS CID
+- `POST /api/deployments/:id/ens/prepare` - Prepare ENS resolver calldata after uploading to Filecoin
+- `POST /api/deployments/:id/ens/confirm` - Confirm a signed ENS transaction hash and verify the resolver
 - `GET /api/projects/:id/deployments` - List project deployments
 
 ## Security Considerations
@@ -374,7 +376,7 @@ If a deployment fails during the upload or ENS update phase, you can resume from
 ### Current Implementation
 
 - All sensitive data is encrypted using AES-256-GCM
-- GitHub tokens and ENS private keys never leave the backend
+- GitHub tokens never leave the backend and ENS transactions are always signed via the connected wallet
 - Session cookies use httpOnly and secure flags
 - CORS configured with frontend URL whitelist
 - Rate limiting on all API routes

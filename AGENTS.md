@@ -31,8 +31,8 @@ Filify is a decentralized deployment platform that enables developers to deploy 
 5. Auto-deployments fire when GitHub sends a push webhook; the backend enqueues a build job per project
 6. Backend clones the repository, builds it, and stores build artifacts for up to 24h
 7. The frontend auto-deploy poller downloads pending artifacts, uploads them to Filecoin via `filecoin-pin`, and receives an IPFS CID
-8. Backend updates the ENS contenthash with the new CID
-9. Deployment is accessible via ENS domain and pinned on Filecoin/IPFS
+8. The backend prepares the ENS resolver transaction while the connected wallet signs & broadcasts it to Ethereum mainnet
+9. Once the transaction confirms, the backend verifies the resolver contenthash so the ENS domain resolves to the new IPFS CID
 
 ---
 
@@ -106,9 +106,9 @@ Filify is a decentralized deployment platform that enables developers to deploy 
 **Services**:
 
 - Build Service: Handles repository cloning, dependency installation, and project building. Supports Next.js, Node.js, and static sites, auto-detects project types/output directories, queues builds per project, enforces 15-minute subprocess timeouts, and retains artifacts for 24h with automatic cleanup.
-- ENS Service: Updates ENS contenthash with IPFS CIDs. Normalizes CID formats, encodes contenthash, and verifies updates.
+- ENS Service: Normalizes IPFS CIDs, prepares ENS resolver calldata (resolver address, calldata, gas estimate), and verifies the on-chain contenthash once the user's wallet broadcasts the transaction.
 - GitHub Service: Integrates with GitHub API to fetch repositories/branches and to register/unregister push webhooks using encrypted secrets.
-- Encryption Service: Provides AES-256-GCM encryption/decryption for sensitive data (tokens, private keys) plus a dedicated key for webhook secrets.
+- Encryption Service: Provides AES-256-GCM encryption/decryption for sensitive data (GitHub tokens, webhook secrets) plus a dedicated key for encrypting GitHub webhook secrets.
 
 **Endpoints**: All API endpoints are functional and documented in README.md. Authentication, projects, repositories, and deployments are fully implemented.
 
@@ -125,6 +125,7 @@ Filify is a decentralized deployment platform that enables developers to deploy 
 ### Schema Details
 
 - `projects` now store `auto_deploy_branch`, `webhook_enabled`, and encrypted `webhook_secret` metadata so each project can manage its own GitHub webhook configuration.
+- `projects` persist the ENS owner address (lowercased) instead of private keys so resolver transactions are always signed by the connected wallet.
 - `deployments` track `triggered_by` (`manual`/`webhook`), `commit_sha`, `commit_message`, and a `build_artifacts_path` pointer so the frontend can download backend-built files.
 
 ---
@@ -145,9 +146,9 @@ Filify is a decentralized deployment platform that enables developers to deploy 
 - **Repository Selection**: From user's GitHub repositories
 - **Branch Selection**: Any branch can be deployed
 - **Build Configuration**: Custom build commands and output directories
-- **ENS Configuration**: Domain name and private key (encrypted)
+- **ENS Configuration**: Domain name (selected from wallet-owned ENS names) and the corresponding owner address
 
-**Current State**: Full CRUD operations for projects. When users create a project, they select a GitHub repository/branch, configure ENS + build settings, and the backend automatically registers the GitHub webhook for auto-deploy using the selected branch. Project settings allow switching the auto-deploy branch or disabling the webhook entirely. Project history shows all deployments with trigger provenance and commit metadata.
+**Current State**: Full CRUD operations for projects. When users create a project, they select a GitHub repository/branch, configure ENS + build settings, and the backend automatically registers the GitHub webhook for auto-deploy using the selected branch. The ENS domain combobox is populated from the connected wallet via the ENS subgraph, and the backend stores only the owner address so signatures always happen client-side. Project settings allow switching the auto-deploy branch or disabling the webhook entirely. Project history shows all deployments with trigger provenance and commit metadata.
 
 ### Build Process
 
@@ -169,20 +170,20 @@ Filify is a decentralized deployment platform that enables developers to deploy 
 
 ### ENS Updates
 
-- **Method**: Updates resolver's contenthash via setContenthash function
+- **Method**: Backend prepares resolver calldata, the connected wallet signs & broadcasts `setContenthash`, backend verifies the resolver afterwards
 - **Network**: Ethereum mainnet
 - **CID Format**: Normalizes CIDv0/CIDv1 to base58btc format
-- **Verification**: Post-update verification of contenthash
+- **Verification**: Post-update verification of contenthash plus ENS tx hash tracking
 
-**Current State**: ENS updates fully functional. Normalizes IPFS CIDs (CIDv0/CIDv1) to base58btc format. Encodes contenthash using EIP-1577 standard. Updates resolver contract via setContenthash function. Verifies updates post-transaction. Stores transaction hashes in database.
+**Current State**: ENS updates are coordinated between the backend and the connected wallet. After Filecoin upload finishes, the backend returns the resolver address, calldata, and gas estimate. The auto-deploy poller (and deployment detail page) prompts the wallet to sign and broadcast the transaction. The backend then watches the transaction, verifies the resolver contenthash, and records the tx hash. No ENS private keys are stored anywhere in the system.
 
 ### Deployment Status Flow
 
 ```
-pending_build → cloning → building → pending_upload → uploading → updating_ens → success/failed
+pending_build → cloning → building → pending_upload → uploading → awaiting_signature → awaiting_confirmation → success/failed
 ```
 
-**Current State**: The backend records queue/build progress (`pending_build`/`cloning`/`building`), then exposes artifacts through `pending_upload`. The frontend auto-deploy poller transitions deployments to `uploading` while it pushes artifacts to Filecoin before the backend finishes with `updating_ens` and `success`/`failed`. Manual uploads still use the same statuses, and failed deployments can be resumed from previous build artifacts.
+**Current State**: The backend records queue/build progress (`pending_build`/`cloning`/`building`), then exposes artifacts through `pending_upload`. The frontend auto-deploy poller transitions deployments to `uploading` while it pushes artifacts to Filecoin. Once the backend prepares the ENS transaction, deployments move to `awaiting_signature` until the wallet signs and `awaiting_confirmation` while Ethereum finalizes. Manual uploads still use the same statuses, and failed deployments can be resumed from previous build artifacts.
 
 ---
 
@@ -218,7 +219,8 @@ pending_build → cloning → building → pending_upload → uploading → upda
 - `GET /api/deployments/:id` - Get deployment status
 - `GET /api/deployments/:id/artifacts` - Download backend build artifacts as a zip
 - `POST /api/deployments/:id/upload/fail` - Mark upload as failed (used when Filecoin upload errors)
-- `POST /api/deployments/:id/ens` - Update ENS with IPFS CID after upload
+- `POST /api/deployments/:id/ens/prepare` - Normalize CID + return resolver calldata for the wallet to sign
+- `POST /api/deployments/:id/ens/confirm` - Record a signed transaction hash and verify the resolver contenthash
 - `GET /api/projects/:id/deployments` - List project deployments
 
 ### Webhook Endpoint
@@ -234,7 +236,7 @@ pending_build → cloning → building → pending_upload → uploading → upda
 ### Data Encryption
 
 - **Algorithm**: AES-256-GCM
-- **Encrypted Data**: GitHub tokens, ENS private keys
+- **Encrypted Data**: GitHub tokens, webhook secrets, session secrets
 - **Storage**: Encrypted values stored in database
 
 ### Session Management
@@ -250,7 +252,7 @@ pending_build → cloning → building → pending_upload → uploading → upda
 - **Input Validation**: Zod schemas for request validation
 - **Authorization**: User ownership verified before operations
 
-**Status**: Security implementation is stable. All sensitive data encrypted with AES-256-GCM. CORS, rate limiting, and input validation in place. User ownership verified for all operations.
+**Status**: Security implementation is stable. All sensitive data encrypted with AES-256-GCM. CORS, rate limiting, and input validation in place. User ownership verified for all operations, and GitHub webhook secrets automatically rotate whenever a signature mismatch is detected to self-heal broken webhooks.
 
 ---
 
@@ -262,6 +264,7 @@ pending_build → cloning → building → pending_upload → uploading → upda
 - `VITE_API_URL` - Backend API URL
 - `VITE_WALLET_ADDRESS` - Filecoin wallet address
 - `VITE_SESSION_KEY` - Session key for filecoin-pin
+- `VITE_THEGRAPH_API_KEY` - API key for The Graph gateway (used for ENS domain discovery)
 
 ### Backend Environment Variables
 
@@ -323,9 +326,10 @@ Failed deployments can be resumed from previous builds:
 
 ### Auto Deploy Pipeline
 
-- GitHub push webhooks are registered per-project with encrypted secrets and rate-limited intake.
+- GitHub push webhooks are registered per-project with encrypted secrets (auto-rotated if a signature mismatch is detected) and rate-limited intake.
 - Each webhook event creates a `pending_build` deployment and is enqueued so only one build runs per project at a time.
-- After the backend marks a deployment `pending_upload`, the frontend auto-deploy poller downloads artifacts, uploads them to Filecoin, and calls the ENS update endpoint.
+- After the backend marks a deployment `pending_upload`, the frontend auto-deploy poller downloads artifacts, uploads them to Filecoin, and then requests an ENS payload from the backend.
+- The poller (or the deployment detail page) prompts the connected wallet to sign the resolver transaction (debounced so the wallet only sees one prompt per deployment), submits the tx hash back to the backend, and the backend verifies the resolver before marking the deployment `success`.
 - Upload failures are reported back via `POST /api/deployments/:id/upload/fail` so the UI shows a failed deployment with logs.
 
 ---

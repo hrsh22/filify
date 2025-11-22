@@ -9,7 +9,7 @@ export interface Project {
   repoBranch: string
   autoDeployBranch: string
   ensName: string
-  ensPrivateKey?: string
+  ensOwnerAddress: string
   ethereumRpcUrl: string
   buildCommand?: string | null
   outputDir?: string | null

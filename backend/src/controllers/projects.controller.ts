@@ -3,7 +3,6 @@ import { db } from '../db';
 import { projects } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
 import { generateId } from '../utils/generateId';
-import { encryptionService } from '../services/encryption.service';
 import { githubService } from '../services/github.service';
 import { logger } from '../utils/logger';
 import { webhookSecretService } from '../services/webhook-secret.service';
@@ -106,11 +105,13 @@ export class ProjectsController {
       repoUrl,
       repoBranch,
       ensName,
-      ensPrivateKey,
+      ensOwnerAddress,
       ethereumRpcUrl,
       buildCommand,
       outputDir,
     } = req.body;
+
+    const normalizedOwnerAddress = ensOwnerAddress.toLowerCase();
 
     logger.info('Creating new project', {
       userId,
@@ -118,6 +119,7 @@ export class ProjectsController {
       repoName,
       repoBranch: repoBranch || 'main',
       ensName,
+      ensOwnerAddress: normalizedOwnerAddress,
     });
 
     try {
@@ -127,8 +129,6 @@ export class ProjectsController {
       await githubService.getRepository(user.githubToken, owner, repo);
       logger.debug('Repository access validated', { owner, repo });
 
-      // Encrypt sensitive data
-      const encryptedENSKey = encryptionService.encrypt(ensPrivateKey);
       const secretPlain = webhookSecretService.generate();
       const encryptedSecret = webhookSecretService.encrypt(secretPlain);
       const webhookUrl = getWebhookUrl();
@@ -158,7 +158,7 @@ export class ProjectsController {
           repoBranch: selectedBranch,
           autoDeployBranch: selectedBranch,
           ensName,
-          ensPrivateKey: encryptedENSKey,
+          ensOwnerAddress: normalizedOwnerAddress,
           ethereumRpcUrl,
           buildCommand: buildCommand || null,
           outputDir: outputDir || null,
@@ -217,10 +217,8 @@ export class ProjectsController {
         });
       }
 
-      // Encrypt ENS key if provided
-      if (updates.ensPrivateKey) {
-        logger.debug('Encrypting ENS private key for update', { projectId: id });
-        updates.ensPrivateKey = encryptionService.encrypt(updates.ensPrivateKey);
+      if (updates.ensOwnerAddress) {
+        updates.ensOwnerAddress = updates.ensOwnerAddress.toLowerCase();
       }
 
       const updated = await db

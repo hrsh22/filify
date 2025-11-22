@@ -2,7 +2,12 @@ import { Router } from 'express';
 import { deploymentsController } from '../controllers/deployments.controller';
 import { isAuthenticated } from '../middleware/auth';
 import { validateRequest } from '../middleware/validateRequest';
-import { createDeploymentSchema, updateENSSchema, uploadFailureSchema } from '../utils/validators';
+import {
+    createDeploymentSchema,
+    prepareENSSchema,
+    confirmENSSchema,
+    uploadFailureSchema,
+} from '../utils/validators';
 
 const router = Router();
 
@@ -14,10 +19,16 @@ router.post(
 );
 
 router.post(
-    '/:id/ens',
+    '/:id/ens/prepare',
     isAuthenticated,
-    validateRequest(updateENSSchema),
-    (req, res) => deploymentsController.updateENS(req, res)
+    validateRequest(prepareENSSchema),
+    (req, res) => deploymentsController.prepareENS(req, res)
+);
+router.post(
+    '/:id/ens/confirm',
+    isAuthenticated,
+    validateRequest(confirmENSSchema),
+    (req, res) => deploymentsController.confirmENS(req, res)
 );
 router.post(
     '/:id/upload/fail',

@@ -1,6 +1,16 @@
 import type { Deployment } from '@/types'
 import { api } from './api'
 
+export type PreparedEnsPayload = {
+  resolverAddress: string
+  data: string
+  chainId: number
+  rpcUrl: string
+  encodedContenthash: string
+  normalizedCid: string
+  gasEstimate?: string | null
+}
+
 export const deploymentsService = {
   async create(projectId: string, options?: { resumeFromPrevious?: boolean }) {
     const payload: Record<string, unknown> = { projectId }
@@ -24,8 +34,18 @@ export const deploymentsService = {
     })
     return data
   },
-  async updateEns(id: string, ipfsCid: string) {
-    const { data } = await api.post<{ status: string; message: string }>(`/deployments/${id}/ens`, { ipfsCid })
+  async prepareEns(id: string, ipfsCid: string) {
+    const { data } = await api.post<{ status: string; payload: PreparedEnsPayload }>(
+      `/deployments/${id}/ens/prepare`,
+      { ipfsCid }
+    )
+    return data
+  },
+  async confirmEns(id: string, txHash: string) {
+    const { data } = await api.post<{ status: string; txHash: string; verified: boolean }>(
+      `/deployments/${id}/ens/confirm`,
+      { txHash }
+    )
     return data
   },
   async markUploadFailed(id: string, message?: string) {

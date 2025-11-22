@@ -112,7 +112,8 @@ Opens Drizzle Studio to view and manage database records.
 
 - `POST /api/deployments` - Create new deployment (trigger build)
 - `GET /api/deployments/:id` - Get deployment status
-- `POST /api/deployments/:id/ens` - Update ENS with IPFS CID (called by frontend)
+- `POST /api/deployments/:id/ens/prepare` - Persist the IPFS CID and return ENS resolver calldata
+- `POST /api/deployments/:id/ens/confirm` - Record a signed ENS transaction hash and verify the resolver
 - `GET /api/projects/:id/deployments` - List project deployments
 
 ## Deployment Flow
@@ -120,21 +121,21 @@ Opens Drizzle Studio to view and manage database records.
 1. **User triggers deployment** → `POST /api/deployments`
 2. **Backend clones repo** → Updates status to `cloning`
 3. **Backend runs build** → Updates status to `building`, stores logs
-4. **Build completes** → Updates status to `uploading`
-5. **Frontend uploads to Filecoin** → (happens on frontend)
-6. **Frontend calls backend** → `POST /api/deployments/:id/ens` with IPFS CID
-7. **Backend updates ENS** → Updates status to `updating_ens`
-8. **ENS update completes** → Updates status to `success`, stores tx hash
+4. **Build completes** → Updates status to `pending_upload`
+5. **Frontend uploads to Filecoin** → Auto-deploy poller downloads artifacts and sets status `uploading`
+6. **Frontend calls backend** → `POST /api/deployments/:id/ens/prepare` to store the CID & receive resolver calldata (`awaiting_signature`)
+7. **Wallet signs tx & frontend confirms** → Wallet broadcasts the tx, frontend calls `POST /api/deployments/:id/ens/confirm` (`awaiting_confirmation`)
+8. **ENS verification completes** → Backend verifies the resolver, updates status to `success`, stores tx hash
 
 ### Status Flow:
 
 ```
-cloning → building → uploading → updating_ens → success/failed
+cloning → building → pending_upload → uploading → awaiting_signature → awaiting_confirmation → success/failed
 ```
 
 ## Security
 
-- All sensitive data (GitHub tokens, ENS private keys) are encrypted using AES-256-GCM
+- All sensitive data (GitHub tokens, webhook secrets) are encrypted using AES-256-GCM
 - Environment variables validated on startup
 - CORS configured with frontend URL whitelist
 - Rate limiting on all routes
@@ -187,15 +188,16 @@ backend/
 4. **Deployments**:
     - POST /api/deployments → starts build
     - GET /api/deployments/:id → polls status
-    - POST /api/deployments/:id/ens → updates ENS
+    - POST /api/deployments/:id/ens/prepare → verifies CID + returns ENS calldata
+    - POST /api/deployments/:id/ens/confirm → persists the signed transaction hash
     - GET /api/projects/:id/deployments → lists deployments
 
 ## Important Notes
 
 - **Filecoin upload is handled by frontend** - backend just provides build output
 - Backend updates status to `uploading` when build completes
-- Frontend uploads files and calls backend with IPFS CID
-- Backend then updates ENS and marks deployment as `success`
+- Frontend uploads files, requests ENS calldata, and prompts the wallet to sign the resolver transaction
+- Backend verifies the transaction and marks deployment as `success`
 - ENS uses ETH mainnet
 - Temp build directories in `/tmp/deployments` (cleaned up after builds)
 - Sessions stored in SQLite for simplicity (use Redis in production)

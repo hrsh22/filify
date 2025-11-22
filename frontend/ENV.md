@@ -38,6 +38,11 @@ This document lists all environment variables for the frontend React application
     - Pre-filled in the new project form
     - Example: `VITE_DEFAULT_ETHEREUM_RPC=https://eth-mainnet.g.alchemy.com/v2/${process.env.VITE_ALCHEMY_KEY}`
 
+- **`VITE_THEGRAPH_API_KEY`** (optional)
+    - API key issued by [The Graph](https://thegraph.com/docs/en/developers/api-keys/) gateway
+    - Used when querying the ENS subgraph to list wallet-owned domains
+    - Example: `VITE_THEGRAPH_API_KEY=grt_1234567890abcdef`
+
 ### Filecoin Pin Advanced Configuration
 
 - **`VITE_FILECOIN_RPC_URL`** (optional)
@@ -65,6 +70,7 @@ VITE_BACKEND_URL=http://localhost:3000
 
 # Optional - Ethereum/ENS
 VITE_DEFAULT_ETHEREUM_RPC=https://eth-mainnet.g.alchemy.com/v2/${process.env.VITE_ALCHEMY_KEY}
+VITE_THEGRAPH_API_KEY=grt_1234567890abcdef
 
 # Optional - Filecoin Advanced
 # VITE_FILECOIN_RPC_URL=https://api.filecoin.io/rpc/v1
