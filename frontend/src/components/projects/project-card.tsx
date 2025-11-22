@@ -150,20 +150,24 @@ export function ProjectCard({ project, onChange }: ProjectCardProps) {
             <p className="text-sm font-bold text-muted-foreground">Never deployed</p>
           )}
         </div>
-        <div className="space-y-2 rounded-xl bg-card/50 p-4 shadow-neo-sm">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Terminal className="h-4 w-4" />
-            <p className="text-xs font-semibold uppercase tracking-wide">Build Command</p>
+        {project.buildCommand ? (
+          <div className="space-y-2 rounded-xl bg-card/50 p-4 shadow-neo-sm">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Terminal className="h-4 w-4" />
+              <p className="text-xs font-semibold uppercase tracking-wide">Build Command</p>
+            </div>
+            <p className="font-mono text-xs font-bold text-foreground">{project.buildCommand}</p>
           </div>
-          <p className="font-mono text-xs font-bold text-foreground">{project.buildCommand ?? 'npm run build'}</p>
-        </div>
-        <div className="space-y-2 rounded-xl bg-card/50 p-4 shadow-neo-sm">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <FolderOutput className="h-4 w-4" />
-            <p className="text-xs font-semibold uppercase tracking-wide">Output Directory</p>
+        ) : null}
+        {project.outputDir ? (
+          <div className="space-y-2 rounded-xl bg-card/50 p-4 shadow-neo-sm">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <FolderOutput className="h-4 w-4" />
+              <p className="text-xs font-semibold uppercase tracking-wide">Output Directory</p>
+            </div>
+            <p className="font-mono text-xs font-bold text-foreground">{project.outputDir}</p>
           </div>
-          <p className="font-mono text-xs font-bold text-foreground">{project.outputDir ?? 'out'}</p>
-        </div>
+        ) : null}
       </div>
 
       {canResume ? (

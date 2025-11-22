@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
+import { ArrowLeft, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,6 +25,7 @@ export function DeploymentDetailPage() {
     const { project } = useProject(deployment?.projectId);
     const { showToast } = useToast();
     const [cancelling, setCancelling] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
     useAutoDeployPoller(true);
 
     const handleCancel = async () => {
@@ -70,6 +72,15 @@ export function DeploymentDetailPage() {
     const etherscanUrl = deployment.ensTxHash ? `https://etherscan.io/tx/${deployment.ensTxHash}` : null;
     const isCancellable = CANCELLABLE_STATUSES.has(deployment.status);
 
+    const handleRefresh = async () => {
+        setRefreshing(true);
+        try {
+            await refresh();
+        } finally {
+            setRefreshing(false);
+        }
+    };
+
     return (
         <div className="space-y-8">
             <div className="flex flex-wrap items-center justify-between gap-4">
@@ -81,13 +92,20 @@ export function DeploymentDetailPage() {
                     </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
+                    {deployment.projectId ? (
+                        <Button variant="ghost" onClick={() => navigate(`/projects/${deployment.projectId}`)}>
+                            <ArrowLeft className="h-4 w-4" />
+                            Back
+                        </Button>
+                    ) : null}
                     <DeploymentStatusBadge status={deployment.status} />
                     {deployment.triggeredBy ? (
                         <Badge variant="outline" className="uppercase tracking-wide text-[10px]">
                             {deployment.triggeredBy === "webhook" ? "Auto" : "Manual"}
                         </Badge>
                     ) : null}
-                    <Button variant="outline" onClick={refresh}>
+                    <Button variant="outline" onClick={handleRefresh} disabled={refreshing}>
+                        <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
                         Refresh
                     </Button>
                     {isCancellable ? (

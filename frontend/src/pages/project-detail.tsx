@@ -268,14 +268,18 @@ export function ProjectDetailPage() {
             <p className="text-sm font-medium text-muted-foreground">ENS</p>
             <p className="font-bold">{project.ensName}</p>
           </div>
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">Build command</p>
-            <p className="font-mono text-xs font-bold">{project.buildCommand ?? 'npm run build'}</p>
-          </div>
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">Output directory</p>
-            <p className="font-mono text-xs font-bold">{project.outputDir ?? 'out'}</p>
-          </div>
+          {project.buildCommand ? (
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Build command</p>
+              <p className="font-mono text-xs font-bold">{project.buildCommand}</p>
+            </div>
+          ) : null}
+          {project.outputDir ? (
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Output directory</p>
+              <p className="font-mono text-xs font-bold">{project.outputDir}</p>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
