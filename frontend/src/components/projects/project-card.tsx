@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ExternalLink } from 'lucide-react'
+import { ExternalLink, Rocket, GitBranch, FolderOutput, Terminal, AlertCircle, ArrowRight } from 'lucide-react'
 import { AxiosError } from 'axios'
 import type { Project } from '@/types'
 import { deploymentsService } from '@/services/deployments.service'
@@ -83,75 +83,104 @@ export function ProjectCard({ project, onChange }: ProjectCardProps) {
   }
 
   return (
-    <div className="space-y-4 rounded-3xl border border-border/70 bg-card p-5 shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-sm text-muted-foreground">Repository</p>
-          <a href={project.repoUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-lg font-semibold text-foreground hover:underline">
-            {project.repoName}
-            <ExternalLink className="h-4 w-4" />
-          </a>
+    <div className="group space-y-6 rounded-xl bg-card border border-border p-7 shadow-neo transition-neo hover:shadow-neo-lg hover:border-primary">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex-1 space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary border border-primary shadow-neo-sm">
+              <Rocket className="h-5 w-5 text-white" />
+            </div>
+            <div className="flex-1">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Repository</p>
+              <a 
+                href={project.repoUrl} 
+                target="_blank" 
+                rel="noreferrer" 
+                className="inline-flex items-center gap-2 text-xl font-bold text-foreground hover:text-primary transition-neo group/link"
+              >
+                {project.repoName}
+                <ExternalLink className="h-4 w-4 transition-neo group-hover/link:translate-x-0.5 group-hover/link:-translate-y-0.5" />
+              </a>
+            </div>
+          </div>
         </div>
         <Button variant="ghost" size="sm" onClick={() => navigate(`/projects/${project.id}`)}>
           View details
+          <ArrowRight className="h-4 w-4" />
         </Button>
       </div>
 
-      <div className="grid gap-4 text-sm md:grid-cols-2">
-        <div>
-          <p className="text-muted-foreground">ENS domain</p>
-          <p className="font-medium">{project.ensName}</p>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2 rounded-xl bg-card/50 p-4 shadow-neo-sm">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <GitBranch className="h-4 w-4" />
+            <p className="text-xs font-semibold uppercase tracking-wide">ENS Domain</p>
+          </div>
+          <p className="text-sm font-bold text-cyan">{project.ensName}</p>
         </div>
-        <div>
-          <p className="text-muted-foreground">Latest deployment</p>
+        <div className="space-y-2 rounded-xl bg-card/50 p-4 shadow-neo-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Latest Deployment</p>
           {latestDeployment ? (
             <Badge variant={statusVariantMap[latestDeployment.status] ?? 'outline'} className="capitalize">
               {latestDeployment.status.replace('_', ' ')}
             </Badge>
           ) : (
-            <p className="font-medium text-muted-foreground">Never deployed</p>
+            <p className="text-sm font-bold text-muted-foreground">Never deployed</p>
           )}
         </div>
-        <div>
-          <p className="text-muted-foreground">Build command</p>
-          <p className="font-mono text-xs">{project.buildCommand ?? 'npm run build'}</p>
+        <div className="space-y-2 rounded-xl bg-card/50 p-4 shadow-neo-sm">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Terminal className="h-4 w-4" />
+            <p className="text-xs font-semibold uppercase tracking-wide">Build Command</p>
+          </div>
+          <p className="font-mono text-xs font-bold text-foreground">{project.buildCommand ?? 'npm run build'}</p>
         </div>
-        <div>
-          <p className="text-muted-foreground">Output directory</p>
-          <p className="font-mono text-xs">{project.outputDir ?? 'out'}</p>
+        <div className="space-y-2 rounded-xl bg-card/50 p-4 shadow-neo-sm">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <FolderOutput className="h-4 w-4" />
+            <p className="text-xs font-semibold uppercase tracking-wide">Output Directory</p>
+          </div>
+          <p className="font-mono text-xs font-bold text-foreground">{project.outputDir ?? 'out'}</p>
         </div>
       </div>
 
       {canResume ? (
-        <label className="flex items-start gap-2 rounded-2xl border border-dashed border-border/70 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+        <label className="flex items-start gap-3 rounded-xl bg-muted/30 p-4 text-sm font-medium text-muted-foreground shadow-neo-inset cursor-pointer transition-neo hover:bg-muted/40">
           <input
             type="checkbox"
-            className="mt-1 h-4 w-4 rounded border border-border accent-foreground"
+            className="mt-1 h-5 w-5 rounded-lg border-2 border-border accent-primary shadow-neo-sm cursor-pointer"
             checked={resumeFromPrevious}
             onChange={(event) => setResumeFromPrevious(event.target.checked)}
             disabled={isDeploying}
           />
-          <span>
-            Resume from last build (status: {lastStatusLabel})
-            <span className="block text-xs">
+          <div className="flex-1 space-y-1">
+            <div className="flex items-center gap-2 font-semibold text-foreground">
+              <AlertCircle className="h-4 w-4" />
+              Resume from last build (status: {lastStatusLabel})
+            </div>
+            <p className="text-xs">
               Uncheck to start a fresh deployment (will re-clone the repository).
-            </span>
-          </span>
+            </p>
+          </div>
         </label>
       ) : null}
 
       <div className="flex flex-wrap gap-3">
-        <Button onClick={handleDeploy} disabled={isDeploying || projectBusy}>
+        <Button onClick={handleDeploy} disabled={isDeploying || projectBusy} className="flex-1 min-w-[140px]">
+          <Rocket className="h-4 w-4" />
           {isDeploying ? 'Deploying...' : 'Deploy'}
         </Button>
-        <Button variant="outline" onClick={handleDelete} disabled={isDeleting}>
+        <Button variant="outline" onClick={handleDelete} disabled={isDeleting} className="min-w-[120px]">
           {isDeleting ? 'Deleting...' : 'Delete'}
         </Button>
       </div>
       {projectBusy ? (
-        <p className="text-sm text-muted-foreground">
-          A deployment is already running. Cancel it or wait for it to finish before starting another.
-        </p>
+        <div className="flex items-start gap-2 rounded-xl bg-primary/10 p-4 text-sm text-primary border border-primary/20">
+          <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
+          <p>
+            A deployment is already running. Cancel it or wait for it to finish before starting another.
+          </p>
+        </div>
       ) : null}
     </div>
   )

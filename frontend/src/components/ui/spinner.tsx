@@ -4,7 +4,7 @@ import type { HTMLAttributes } from 'react'
 export function Spinner({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('h-5 w-5 animate-spin rounded-full border-2 border-muted border-t-foreground', className)}
+      className={cn('h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-primary shadow-neo-sm', className)}
       {...props}
     />
   )

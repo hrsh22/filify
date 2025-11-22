@@ -4,21 +4,22 @@ import { cn } from '@/utils/cn'
 import type { ButtonHTMLAttributes } from 'react'
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center rounded-full text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-60 ring-offset-background',
+  'inline-flex items-center justify-center gap-2 rounded-lg text-sm font-semibold transition-neo focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed ring-offset-background active-press border',
   {
     variants: {
       variant: {
-        default: 'bg-foreground text-background hover:opacity-90',
-        secondary: 'bg-muted text-foreground hover:bg-muted/80',
-        outline: 'border border-border bg-transparent hover:bg-accent',
-        ghost: 'hover:bg-muted text-foreground',
-        destructive: 'bg-destructive text-white hover:bg-destructive/90',
+        default: 'bg-primary text-primary-foreground border-primary shadow-neo-sm hover:shadow-neo hover:-translate-y-0.5 hover:glow-primary',
+        secondary: 'bg-card text-foreground border-border shadow-neo-sm hover:shadow-neo hover:-translate-y-0.5 hover:border-primary',
+        outline: 'border-primary/50 bg-transparent text-primary hover:bg-primary/10 hover:shadow-neo-sm hover:-translate-y-0.5 hover:border-primary',
+        ghost: 'border-transparent hover:bg-muted/50 text-foreground hover:border-border',
+        destructive: 'bg-destructive text-white border-destructive shadow-neo-sm hover:shadow-neo hover:-translate-y-0.5 hover:brightness-110',
+        accent: 'bg-cyan text-cyan-foreground border-cyan shadow-neo-sm hover:shadow-neo hover:-translate-y-0.5 hover:glow-cyan',
       },
       size: {
-        default: 'px-4 py-2',
-        sm: 'px-3 py-1.5 text-xs',
-        lg: 'px-6 py-3 text-base',
-        icon: 'h-9 w-9 rounded-full',
+        default: 'px-5 py-2.5',
+        sm: 'px-3 py-2 text-xs',
+        lg: 'px-8 py-4 text-base',
+        icon: 'h-10 w-10 rounded-lg',
       },
     },
     defaultVariants: {

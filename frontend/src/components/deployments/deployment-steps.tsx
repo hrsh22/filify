@@ -1,4 +1,4 @@
-import { Check, Loader2 } from 'lucide-react'
+import { Check, Loader2, GitBranch, Hammer, Upload, Globe, CheckCircle, XCircle, AlertCircle } from 'lucide-react'
 import type { DeploymentStatus } from '@/types'
 
 const order: DeploymentStatus[] = ['cloning', 'building', 'uploading', 'updating_ens', 'success']
@@ -22,32 +22,60 @@ const labelMap: Record<DeploymentStatus, string> = {
   cancelled: 'Cancelled',
 }
 
+const stepIcons: Record<string, React.ComponentType<{ className?: string }>> = {
+  cloning: GitBranch,
+  building: Hammer,
+  uploading: Upload,
+  updating_ens: Globe,
+  success: CheckCircle,
+}
+
 export function DeploymentSteps({ status }: { status: DeploymentStatus }) {
   const steps = status === 'failed' || status === 'cancelled' ? order.slice(0, 4) : order
   return (
-    <ol className="space-y-4">
-      {steps.map((step) => {
+    <ol className="space-y-5">
+      {steps.map((step, index) => {
         const state = getStepState(status, step)
+        const Icon = stepIcons[step]
         return (
-          <li key={step} className="flex items-center gap-3">
-            <span
-              className={`flex h-8 w-8 items-center justify-center rounded-full border text-sm ${
-                state === 'complete'
-                  ? 'border-emerald-500 bg-emerald-500/15 text-emerald-500'
-                  : state === 'active'
-                    ? 'border-primary text-primary'
-                    : 'border-border text-muted-foreground'
-              }`}
-            >
-              {state === 'complete' ? <Check className="h-4 w-4" /> : state === 'active' ? <Loader2 className="h-4 w-4 animate-spin" /> : step === 'success' ? 5 : order.indexOf(step) + 1}
-            </span>
-            <div>
-              <p className="font-medium capitalize">{labelMap[step]}</p>
-              <p className="text-sm text-muted-foreground">
+          <li key={step} className="flex items-start gap-4">
+            <div className="relative flex-shrink-0">
+              <div
+                className={`flex h-12 w-12 items-center justify-center rounded-lg font-bold text-sm shadow-neo-sm transition-neo ${
+                  state === 'complete'
+                    ? 'bg-cyan border border-cyan text-black'
+                    : state === 'active'
+                      ? 'bg-primary border border-primary text-black animate-pulse-glow'
+                      : 'bg-card/50 text-muted-foreground shadow-neo-inset'
+                }`}
+              >
+                {state === 'complete' ? (
+                  <Check className="h-6 w-6" />
+                ) : state === 'active' ? (
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                ) : Icon ? (
+                  <Icon className="h-5 w-5" />
+                ) : (
+                  index + 1
+                )}
+              </div>
+              {index < steps.length - 1 && (
+                <div className={`absolute left-1/2 top-12 h-5 w-0.5 -translate-x-1/2 ${
+                  state === 'complete' ? 'bg-gradient-accent' : 'bg-muted/30'
+                }`} />
+              )}
+            </div>
+            <div className="flex-1 pt-2">
+              <p className={`font-bold capitalize text-base ${
+                state === 'active' ? 'text-primary' : state === 'complete' ? 'text-foreground' : 'text-muted-foreground'
+              }`}>
+                {labelMap[step]}
+              </p>
+              <p className="text-sm font-medium text-muted-foreground mt-1">
                 {state === 'active'
-                  ? 'In progress'
+                  ? 'In progress...'
                   : state === 'complete'
-                    ? 'Complete'
+                    ? 'Complete ✓'
                     : 'Pending'}
               </p>
             </div>
@@ -55,19 +83,23 @@ export function DeploymentSteps({ status }: { status: DeploymentStatus }) {
         )
       })}
       {status === 'failed' ? (
-        <li className="flex items-center gap-3">
-          <span className="flex h-8 w-8 items-center justify-center rounded-full border border-destructive text-destructive">!</span>
-          <div>
-            <p className="font-medium text-destructive">Deployment failed</p>
-            <p className="text-sm text-muted-foreground">Check logs below for details.</p>
+        <li className="flex items-start gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-destructive/20 font-bold text-destructive shadow-neo-sm">
+            <XCircle className="h-6 w-6" />
+          </div>
+          <div className="pt-2">
+            <p className="font-bold text-destructive text-base">Deployment failed</p>
+            <p className="text-sm font-medium text-muted-foreground mt-1">Check logs below for details.</p>
           </div>
         </li>
       ) : status === 'cancelled' ? (
-        <li className="flex items-center gap-3">
-          <span className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted-foreground">✕</span>
-          <div>
-            <p className="font-medium">Deployment cancelled</p>
-            <p className="text-sm text-muted-foreground">Cancelled before completion.</p>
+        <li className="flex items-start gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-muted/30 font-bold text-muted-foreground shadow-neo-sm">
+            <AlertCircle className="h-6 w-6" />
+          </div>
+          <div className="pt-2">
+            <p className="font-bold text-base">Deployment cancelled</p>
+            <p className="text-sm font-medium text-muted-foreground mt-1">Cancelled before completion.</p>
           </div>
         </li>
       ) : null}

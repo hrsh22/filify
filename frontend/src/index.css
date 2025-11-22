@@ -18,65 +18,220 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  --color-cyan: var(--cyan);
+  --color-cyan-foreground: var(--cyan-foreground);
+  --color-blue: var(--blue);
+  --color-blue-foreground: var(--blue-foreground);
   --color-destructive: var(--destructive);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --radius-sm: calc(var(--radius) - 4px);
+  --radius-sm: calc(var(--radius) - 6px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) + 8px);
+  --radius-2xl: calc(var(--radius) + 12px);
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-}
-
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.556 0 0);
+  /* Retro dark theme with grid background */
+  --radius: 0.5rem;
+  
+  /* Black background with grid */
+  --background: #000000;
+  --foreground: #e0e0e0;
+  
+  /* Gray card surfaces for contrast */
+  --card: #1a1a1a;
+  --card-foreground: #e0e0e0;
+  
+  /* Popover surfaces */
+  --popover: #1a1a1a;
+  --popover-foreground: #e0e0e0;
+  
+  /* Cyan primary - retro computing */
+  --primary: #00d4ff;
+  --primary-foreground: #000000;
+  
+  /* Secondary surfaces */
+  --secondary: #262626;
+  --secondary-foreground: #e0e0e0;
+  
+  /* Muted elements */
+  --muted: #262626;
+  --muted-foreground: #888888;
+  
+  /* Cyan/Blue accent colors */
+  --accent: #00d4ff;
+  --accent-foreground: #000000;
+  --cyan: #00d4ff;
+  --cyan-foreground: #000000;
+  --blue: #0ea5e9;
+  --blue-foreground: #000000;
+  
+  /* Destructive */
+  --destructive: #ef4444;
+  
+  /* Borders - cyan glow */
+  --border: rgba(0, 212, 255, 0.2);
+  
+  /* Input fields */
+  --input: #1a1a1a;
+  
+  /* Focus rings */
+  --ring: #00d4ff;
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply outline-ring/50;
+    border-color: var(--border);
   }
 
   body {
     @apply min-h-screen bg-background font-sans text-foreground antialiased;
+    background-image: 
+      linear-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px);
+    background-size: 50px 50px;
+    background-position: -1px -1px;
   }
+}
+
+@layer utilities {
+  /* Neomorphic shadow utilities - soft depth */
+  .shadow-neo {
+    box-shadow: 
+      8px 8px 16px rgba(0, 0, 0, 0.4),
+      -8px -8px 16px rgba(255, 255, 255, 0.03);
+  }
+  
+  .shadow-neo-sm {
+    box-shadow: 
+      4px 4px 8px rgba(0, 0, 0, 0.3),
+      -4px -4px 8px rgba(255, 255, 255, 0.02);
+  }
+  
+  .shadow-neo-lg {
+    box-shadow: 
+      12px 12px 24px rgba(0, 0, 0, 0.5),
+      -12px -12px 24px rgba(255, 255, 255, 0.04);
+  }
+  
+  .shadow-neo-xl {
+    box-shadow: 
+      16px 16px 32px rgba(0, 0, 0, 0.6),
+      -16px -16px 32px rgba(255, 255, 255, 0.05);
+  }
+  
+  /* Inset shadows for pressed/input elements */
+  .shadow-neo-inset {
+    box-shadow: 
+      inset 4px 4px 8px rgba(0, 0, 0, 0.4),
+      inset -4px -4px 8px rgba(255, 255, 255, 0.02);
+  }
+  
+  .shadow-neo-inset-lg {
+    box-shadow: 
+      inset 6px 6px 12px rgba(0, 0, 0, 0.5),
+      inset -6px -6px 12px rgba(255, 255, 255, 0.03);
+  }
+  
+  /* Glow effects for accents */
+  .glow-primary {
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
+  }
+  
+  .glow-cyan {
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
+  }
+  
+  .glow-blue {
+    box-shadow: 0 0 20px rgba(14, 165, 233, 0.4);
+  }
+  
+  /* Smooth transitions */
+  .transition-neo {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .transition-neo-fast {
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  /* Hover lift effect */
+  .hover-lift {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 
+      10px 10px 20px rgba(0, 0, 0, 0.5),
+      -10px -10px 20px rgba(255, 255, 255, 0.04);
+  }
+  
+  /* Pressed effect */
+  .active-press:active {
+    transform: translateY(1px);
+    box-shadow: 
+      inset 4px 4px 8px rgba(0, 0, 0, 0.4),
+      inset -4px -4px 8px rgba(255, 255, 255, 0.02);
+  }
+}
+
+@layer components {
+  /* Shimmer animation for loading states */
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+  
+  .animate-shimmer {
+    animation: shimmer 2s infinite linear;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.05) 50%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+  }
+  
+  /* Fade in animation */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .animate-fade-in {
+    animation: fadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  /* Pulse glow animation */
+  @keyframes pulseGlow {
+    0%, 100% {
+      box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+    }
+    50% {
+      box-shadow: 0 0 30px rgba(0, 212, 255, 0.5);
+    }
+  }
+  
+  .animate-pulse-glow {
+    animation: pulseGlow 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+  
+  /* Gradient backgrounds */
+  /* Removed gradients for retro theme - using solid colors with borders */
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { LogOut } from 'lucide-react'
 import { Button, type ButtonProps } from '@/components/ui/button'
 import { useAuth } from '@/context/auth-context'
 import { useToast } from '@/context/toast-context'
@@ -30,6 +31,7 @@ export function SignOutButton({ label = 'Sign out', ...props }: SignOutButtonPro
 
   return (
     <Button onClick={handleLogout} disabled={isSubmitting} variant="ghost" {...props}>
+      <LogOut className="h-4 w-4" />
       {isSubmitting ? 'Signing out...' : label}
     </Button>
   )

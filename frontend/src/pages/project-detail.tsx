@@ -84,44 +84,46 @@ export function ProjectDetailPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-primary">Project</p>
-          <h2 className="text-2xl font-semibold">{project.name}</h2>
-          <p className="text-sm text-muted-foreground">{project.repoName}</p>
+        <div className="space-y-2">
+          <p className="text-sm font-bold uppercase tracking-wide text-cyan">Project</p>
+          <h2 className="text-4xl font-bold text-foreground">{project.name}</h2>
+          <p className="text-base font-medium text-muted-foreground">{project.repoName}</p>
         </div>
         <div className="flex flex-wrap gap-3">
-          <Button variant="outline" onClick={() => navigate('/dashboard')}>
+          <Button variant="ghost" onClick={() => navigate('/dashboard')}>
             Back
           </Button>
-          <Button onClick={handleDeploy} disabled={isDeploying || projectBusy}>
+          <Button onClick={handleDeploy} disabled={isDeploying || projectBusy} size="lg" className="shadow-neo">
             {isDeploying ? 'Deploying...' : projectBusy ? 'Deployment running' : 'Deploy now'}
           </Button>
         </div>
       </div>
 
       {projectBusy ? (
-        <p className="text-sm text-muted-foreground">
-          A deployment is currently running. Cancel it or wait until it completes before starting a new one.
-        </p>
+        <div className="flex items-start gap-3 rounded-xl bg-primary/10 p-5 text-primary border border-primary/20 shadow-neo-sm">
+          <p className="text-sm font-semibold">
+            A deployment is currently running. Cancel it or wait until it completes before starting a new one.
+          </p>
+        </div>
       ) : null}
 
       {canResume ? (
-        <label className="flex items-start gap-2 rounded-2xl border border-dashed border-border/70 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+        <label className="flex items-start gap-3 rounded-xl bg-muted/30 p-5 text-sm font-medium text-muted-foreground shadow-neo-inset cursor-pointer transition-neo hover:bg-muted/40">
           <input
             type="checkbox"
-            className="mt-1 h-4 w-4 rounded border border-border accent-foreground"
+            className="mt-1 h-5 w-5 rounded-lg border-2 border-border accent-primary shadow-neo-sm cursor-pointer"
             checked={resumeFromPrevious}
             onChange={(event) => setResumeFromPrevious(event.target.checked)}
             disabled={isDeploying || projectBusy}
           />
-          <span>
-            Resume from last build (status: {latestStatusLabel})
+          <div className="flex-1 space-y-1">
+            <span className="font-semibold text-foreground">Resume from last build (status: {latestStatusLabel})</span>
             <span className="block text-xs">
               Uncheck to run a full deployment and clone the repository again.
             </span>
-          </span>
+          </div>
         </label>
       ) : null}
 
@@ -131,23 +133,23 @@ export function ProjectDetailPage() {
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div>
-            <p className="text-sm text-muted-foreground">Repository</p>
-            <a href={project.repoUrl} target="_blank" rel="noreferrer" className="text-foreground underline-offset-4 hover:underline">
+            <p className="text-sm font-medium text-muted-foreground">Repository</p>
+            <a href={project.repoUrl} target="_blank" rel="noreferrer" className="font-bold text-foreground underline-offset-4 hover:underline">
               {project.repoName}
             </a>
-            <p className="text-xs text-muted-foreground">Branch: {project.repoBranch}</p>
+            <p className="text-xs font-medium text-muted-foreground">Branch: {project.repoBranch}</p>
           </div>
           <div>
-            <p className="text-sm text-muted-foreground">ENS</p>
-            <p className="font-medium">{project.ensName}</p>
+            <p className="text-sm font-medium text-muted-foreground">ENS</p>
+            <p className="font-bold">{project.ensName}</p>
           </div>
           <div>
-            <p className="text-sm text-muted-foreground">Build command</p>
-            <p className="font-mono text-xs">{project.buildCommand ?? 'npm run build'}</p>
+            <p className="text-sm font-medium text-muted-foreground">Build command</p>
+            <p className="font-mono text-xs font-bold">{project.buildCommand ?? 'npm run build'}</p>
           </div>
           <div>
-            <p className="text-sm text-muted-foreground">Output directory</p>
-            <p className="font-mono text-xs">{project.outputDir ?? 'out'}</p>
+            <p className="text-sm font-medium text-muted-foreground">Output directory</p>
+            <p className="font-mono text-xs font-bold">{project.outputDir ?? 'out'}</p>
           </div>
         </CardContent>
       </Card>
@@ -156,14 +158,14 @@ export function ProjectDetailPage() {
         <CardHeader>
           <CardTitle>Deployment history</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-4">
           {project.deployments && project.deployments.length > 0 ? (
             project.deployments.map((deployment) => (
-              <div key={deployment.id} className="rounded-2xl border border-border/70 px-4 py-3">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="space-y-1">
+              <div key={deployment.id} className="group rounded-xl bg-card/50 px-6 py-5 shadow-neo-sm transition-neo hover:shadow-neo hover:-translate-y-1">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="space-y-2">
                     <DeploymentStatusBadge status={deployment.status} />
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm font-medium text-muted-foreground">
                       {formatDistanceToNow(new Date(deployment.createdAt), { addSuffix: true })}
                     </p>
                     {deployment.ipfsCid ? (
@@ -171,9 +173,9 @@ export function ProjectDetailPage() {
                         href={`https://ipfs.io/ipfs/${deployment.ipfsCid}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-sm text-primary underline-offset-4 hover:underline"
+                        className="block text-sm text-cyan underline-offset-4 hover:underline font-semibold"
                       >
-                        IPFS: {deployment.ipfsCid}
+                        IPFS: {deployment.ipfsCid.slice(0, 12)}...
                       </a>
                     ) : null}
                   </div>
@@ -186,7 +188,7 @@ export function ProjectDetailPage() {
               </div>
             ))
           ) : (
-            <p className="text-sm text-muted-foreground">No deployments yet.</p>
+            <p className="text-sm text-muted-foreground font-medium">No deployments yet.</p>
           )}
         </CardContent>
       </Card>

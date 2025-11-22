@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping build the Filecoin Pin demo! This document captures the preferred project layout, integration points for [`filecoin-pin`](https://github.com/filecoin-project/filecoin-pin), and day-to-day conventions.
+Thanks for helping build the Filify! This document captures the preferred project layout, integration points for [`filecoin-pin`](https://github.com/filecoin-project/filecoin-pin), and day-to-day conventions.
 
 ## Local Setup
 
@@ -43,10 +43,11 @@ VITE_WARM_STORAGE_ADDRESS=0x...           # Override warm storage contract addre
 The demo runs on Filecoin Calibration testnet and requires two types of tokens:
 
 - **Test FIL** - For transaction gas fees
-  - Get from: [Filecoin Calibration Faucet](https://faucet.calibnet.chainsafe-fil.io/funds.html)
+
+    - Get from: [Filecoin Calibration Faucet](https://faucet.calibnet.chainsafe-fil.io/funds.html)
 
 - **Test USDFC** - For storage payments (USD stablecoin backed by FIL)
-  - Get from: [USDFC Faucet](https://forest-explorer.chainsafe.dev/faucet/calibnet_usdfc)
+    - Get from: [USDFC Faucet](https://forest-explorer.chainsafe.dev/faucet/calibnet_usdfc)
 
 ### 4. Run the Development Server
 
@@ -76,11 +77,11 @@ The main logic demonstrating `filecoin-pin` usage:
 - **[`src/hooks/use-filecoin-upload.ts`](src/hooks/use-filecoin-upload.ts)** - Core upload hook showing how to use `filecoin-pin` to upload files to Filecoin with progress tracking.
 - **[`src/context/filecoin-pin-provider.tsx`](src/context/filecoin-pin-provider.tsx)** - React context that initializes and exposes the Synapse client, manages wallet state.
 - **[`src/lib/filecoin-pin/`](src/lib/filecoin-pin/)** - Configuration and Synapse client singleton.
-  - [`config.ts`](src/lib/filecoin-pin/config.ts) - Reads environment variables for Synapse configuration (supports both private key and session key auth).
-  - [`synapse.ts`](src/lib/filecoin-pin/synapse.ts) - Singleton pattern for Synapse client initialization.
-  - [`wallet.ts`](src/lib/filecoin-pin/wallet.ts) - Helper functions for fetching and formatting wallet data.
+    - [`config.ts`](src/lib/filecoin-pin/config.ts) - Reads environment variables for Synapse configuration (supports both private key and session key auth).
+    - [`synapse.ts`](src/lib/filecoin-pin/synapse.ts) - Singleton pattern for Synapse client initialization.
+    - [`wallet.ts`](src/lib/filecoin-pin/wallet.ts) - Helper functions for fetching and formatting wallet data.
 - **[`src/lib/local-storage/`](src/lib/local-storage/)** - Browser localStorage utilities.
-  - [`data-set.ts`](src/lib/local-storage/data-set.ts) - Stores and retrieves data set IDs scoped by wallet address.
+    - [`data-set.ts`](src/lib/local-storage/data-set.ts) - Stores and retrieves data set IDs scoped by wallet address.
 
 ### Supporting Hooks
 
@@ -114,6 +115,7 @@ This project uses [Conventional Commits](https://www.conventionalcommits.org/) f
 **Format:** `<type>: <description>`
 
 **Common types:**
+
 - `feat:` - New feature
 - `fix:` - Bug fix
 - `docs:` - Documentation changes
@@ -122,6 +124,7 @@ This project uses [Conventional Commits](https://www.conventionalcommits.org/) f
 - `chore:` - Maintenance tasks, dependency updates
 
 **Examples:**
+
 ```
 feat: add drag-and-drop file upload support
 fix: correct IPNI indexing verification logic

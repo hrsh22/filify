@@ -6,6 +6,8 @@ import type { RepositorySummary } from "@/types";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Combobox } from "@/components/ui/combobox";
 import { useToast } from "@/context/toast-context";
 import { useNavigate } from "react-router-dom";
 import { projectsService } from "@/services/projects.service";
@@ -16,16 +18,49 @@ const schema = z.object({
     repoName: z.string().min(1, "Repository is required"),
     repoUrl: z.string().url(),
     repoBranch: z.string().min(1, "Branch is required"),
+    framework: z.enum(["html", "nextjs"], { required_error: "Framework is required" }),
     ensName: z.string().regex(/^[a-z0-9-]+\.eth$/i, "Invalid ENS name"),
     ensPrivateKey: z.string().regex(/^0x[a-fA-F0-9]{64}$/, "Private key must be 64 hex chars"),
-    ethereumRpcUrl: z.string().url("Invalid RPC URL"),
-    buildCommand: z.string().min(1).default("npm run build"),
-    outputDir: z.string().min(1).default("out")
+    buildCommand: z.string().optional(),
+    outputDir: z.string().optional()
+}).refine((data) => {
+    // Build config required only for Next.js
+    if (data.framework === "nextjs") {
+        return !!(data.buildCommand && data.outputDir);
+    }
+    return true;
+}, {
+    message: "Build command and output directory are required for Next.js",
+    path: ["buildCommand"]
 });
 
 type FormValues = z.infer<typeof schema>;
 
-const DEFAULT_RPC = import.meta.env.VITE_DEFAULT_ETHEREUM_RPC ?? `https://eth-mainnet.g.alchemy.com/v2/0INEHyBWJeRtdwKOIIkaOW4Jnh92W6gB`;
+const ETH_MAINNET_RPC = `https://eth-mainnet.g.alchemy.com/v2/0INEHyBWJeRtdwKOIIkaOW4Jnh92W6gB`;
+
+type Framework = "html" | "nextjs";
+
+const FRAMEWORKS: { value: Framework; label: string; status: "supported" | "coming-soon" }[] = [
+    { value: "html", label: "HTML", status: "supported" },
+    { value: "nextjs", label: "Next.js", status: "coming-soon" },
+];
+
+// Simple framework detection based on repo name and description
+function detectFramework(repo: RepositorySummary | null): Framework | null {
+    if (!repo) return null;
+    
+    const name = repo.name.toLowerCase();
+    const fullName = repo.fullName.toLowerCase();
+    const description = (repo.description || "").toLowerCase();
+    const searchText = `${name} ${fullName} ${description}`;
+    
+    if (searchText.includes("next") || searchText.includes("nextjs") || searchText.includes("next.js")) {
+        return "nextjs";
+    }
+    
+    // Default to HTML if no framework detected
+    return "html";
+}
 
 export function NewProjectForm() {
     const navigate = useNavigate();
@@ -41,14 +76,34 @@ export function NewProjectForm() {
             repoName: "",
             repoUrl: "",
             repoBranch: "main",
+            framework: "html",
             ensName: "",
             ensPrivateKey: "",
-            ethereumRpcUrl: DEFAULT_RPC,
-            buildCommand: "npm run build",
-            outputDir: "out"
+            buildCommand: undefined,
+            outputDir: undefined
         }
     });
 
+    // Prepare repository options for combobox
+    const repoOptions = useMemo(() => {
+        return repositories
+            .map((repo) => ({
+                value: repo.id.toString(),
+                label: repo.fullName,
+                description: repo.description || undefined,
+            }))
+            .sort((a, b) => a.label.localeCompare(b.label));
+    }, [repositories]);
+
+    // Handle repository selection from combobox
+    const handleRepoSelect = (repoId: string) => {
+        const repo = repositories.find((r) => r.id.toString() === repoId);
+        if (repo) {
+            setSelectedRepo(repo);
+        }
+    };
+
+    // Auto-detect framework and set default branch when repo is selected
     useEffect(() => {
         if (selectedRepo) {
             form.setValue("repoName", selectedRepo.fullName);
@@ -56,13 +111,48 @@ export function NewProjectForm() {
             if (!form.getValues("name")) {
                 form.setValue("name", selectedRepo.name);
             }
-            if (!form.getValues("repoBranch") && selectedRepo.defaultBranch) {
+            
+            // Auto-select default branch when repo is selected
+            if (selectedRepo.defaultBranch) {
+                form.setValue("repoBranch", selectedRepo.defaultBranch);
+            }
+            
+            // Auto-detect framework and suggest it (user can override)
+            const detectedFramework = detectFramework(selectedRepo);
+            if (detectedFramework) {
+                form.setValue("framework", detectedFramework);
+            }
+        }
+    }, [selectedRepo, form, repositories]);
+
+    // Update branch when branches are loaded and default branch is available
+    useEffect(() => {
+        if (selectedRepo && branches.length > 0 && selectedRepo.defaultBranch) {
+            const defaultBranchExists = branches.some((b) => b.name === selectedRepo.defaultBranch);
+            if (defaultBranchExists) {
                 form.setValue("repoBranch", selectedRepo.defaultBranch);
             }
         }
-    }, [selectedRepo, form]);
+    }, [branches, selectedRepo, form]);
 
-    const repoOptions = useMemo(() => [...repositories].sort((a, b) => a.fullName.localeCompare(b.fullName)), [repositories]);
+    const selectedFramework = form.watch("framework");
+    const detectedFramework = detectFramework(selectedRepo);
+
+    // Set default build config when Next.js is selected
+    useEffect(() => {
+        if (selectedFramework === "nextjs") {
+            if (!form.getValues("buildCommand")) {
+                form.setValue("buildCommand", "npm run build");
+            }
+            if (!form.getValues("outputDir")) {
+                form.setValue("outputDir", "out");
+            }
+        } else if (selectedFramework === "html") {
+            // Clear build config for HTML
+            form.setValue("buildCommand", undefined);
+            form.setValue("outputDir", undefined);
+        }
+    }, [selectedFramework, form]);
 
     const onSubmit = async (values: FormValues) => {
         try {
@@ -73,9 +163,9 @@ export function NewProjectForm() {
                 repoBranch: values.repoBranch,
                 ensName: values.ensName,
                 ensPrivateKey: values.ensPrivateKey,
-                ethereumRpcUrl: values.ethereumRpcUrl,
-                buildCommand: values.buildCommand,
-                outputDir: values.outputDir
+                ethereumRpcUrl: ETH_MAINNET_RPC, // Always use constant RPC
+                buildCommand: values.buildCommand || undefined,
+                outputDir: values.outputDir || undefined
             });
             showToast("Project created!", "success");
             navigate("/dashboard");
@@ -87,51 +177,95 @@ export function NewProjectForm() {
 
     return (
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-            <section className="space-y-4 rounded-3xl border border-border/70 bg-card p-5">
+            {/* Framework Selection */}
+            <section className="space-y-5 rounded-xl bg-card border border-border p-7 shadow-neo">
                 <div className="space-y-2">
-                    <Label>GitHub repository</Label>
-                    <select
-                        className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
-                        value={selectedRepo?.id ?? ""}
-                        onChange={(event) => {
-                            const repo = repoOptions.find((item) => item.id.toString() === event.target.value);
-                            setSelectedRepo(repo ?? null);
-                        }}
-                        disabled={reposLoading}>
-                        <option value="">{reposLoading ? "Loading repositories..." : "Select a repository"}</option>
-                        {repoOptions.map((repo) => (
-                            <option key={repo.id} value={repo.id}>
-                                {repo.fullName}
-                            </option>
-                        ))}
-                    </select>
-                    {reposError ? (
+                    <Label>Framework</Label>
+                    <p className="text-xs text-muted-foreground">Select the framework for your project</p>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                    {FRAMEWORKS.map((framework) => {
+                        const isSelected = selectedFramework === framework.value;
+                        const isComingSoon = framework.status === "coming-soon";
+                        return (
+                            <button
+                                key={framework.value}
+                                type="button"
+                                onClick={() => {
+                                    if (!isComingSoon) {
+                                        form.setValue("framework", framework.value);
+                                    }
+                                }}
+                                disabled={isComingSoon}
+                                className={`relative rounded-lg border p-4 text-left transition-neo ${
+                                    isSelected
+                                        ? "border-primary bg-primary/10 shadow-neo-sm"
+                                        : isComingSoon
+                                        ? "border-border bg-muted/20 opacity-60 cursor-not-allowed"
+                                        : "border-border bg-card hover:border-primary hover:shadow-neo-sm"
+                                }`}
+                            >
+                                <div className="flex items-center justify-between">
+                                    <span className="font-bold text-foreground">{framework.label}</span>
+                                    {isComingSoon ? (
+                                        <Badge variant="outline" className="text-xs">Coming Soon</Badge>
+                                    ) : isSelected ? (
+                                        <Badge variant="accent" className="text-xs">Selected</Badge>
+                                    ) : null}
+                                </div>
+                                {detectedFramework === framework.value && selectedRepo && (
+                                    <p className="text-xs text-cyan mt-1">Detected from repository</p>
+                                )}
+                            </button>
+                        );
+                    })}
+                </div>
+                {form.formState.errors.framework && (
+                    <p className="text-sm text-destructive font-semibold">{form.formState.errors.framework.message}</p>
+                )}
+            </section>
+
+            {/* Repository Selection */}
+            <section className="space-y-5 rounded-xl bg-card border border-border p-7 shadow-neo">
+                <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                        <Label>GitHub repository</Label>
+                        {selectedRepo && detectedFramework && (
+                            <Badge variant="accent" className="text-xs">
+                                {detectedFramework === "nextjs" ? "Next.js" : "HTML"} detected
+                            </Badge>
+                        )}
+                    </div>
+                    <Combobox
+                        options={repoOptions}
+                        value={selectedRepo?.id.toString()}
+                        onValueChange={handleRepoSelect}
+                        placeholder="Search and select a repository..."
+                        disabled={reposLoading}
+                        loading={reposLoading}
+                        emptyMessage={reposError ? "Failed to load repositories" : "No repositories found"}
+                    />
+                    {reposError && (
                         <p className="text-sm text-destructive">
                             {reposError}{" "}
-                            <button type="button" className="underline" onClick={() => refresh()}>
+                            <button type="button" className="underline font-semibold hover:text-destructive/80" onClick={() => refresh()}>
                                 Retry
                             </button>
                         </p>
-                    ) : selectedRepo ? (
-                        <div className="rounded-2xl border border-dashed border-border/70 bg-muted/40 p-4 text-sm text-muted-foreground">
-                            <p className="font-medium text-foreground">{selectedRepo.fullName}</p>
-                            {selectedRepo.description ? <p>{selectedRepo.description}</p> : null}
-                            <p>Default branch: {selectedRepo.defaultBranch}</p>
-                        </div>
-                    ) : null}
+                    )}
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
+                <div className="grid gap-5 md:grid-cols-2">
+                    <div className="space-y-3">
                         <Label htmlFor="name">Project name</Label>
                         <Input id="name" placeholder="My cool dapp" {...form.register("name")} />
-                        {form.formState.errors.name ? <p className="text-sm text-destructive">{form.formState.errors.name.message}</p> : null}
+                        {form.formState.errors.name ? <p className="text-sm text-destructive font-semibold">{form.formState.errors.name.message}</p> : null}
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                         <Label htmlFor="branch">Branch</Label>
                         <select
                             id="branch"
-                            className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                            className="w-full rounded-lg bg-input px-4 py-3 text-sm font-medium shadow-neo-inset transition-neo focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:glow-primary"
                             disabled={!selectedRepo || branchesLoading}
                             {...form.register("repoBranch")}>
                             <option value="">{branchesLoading ? "Loading..." : "Select a branch"}</option>
@@ -142,58 +276,64 @@ export function NewProjectForm() {
                             ))}
                         </select>
                         {form.formState.errors.repoBranch ? (
-                            <p className="text-sm text-destructive">{form.formState.errors.repoBranch.message}</p>
+                            <p className="text-sm text-destructive font-semibold">{form.formState.errors.repoBranch.message}</p>
                         ) : null}
                     </div>
                 </div>
             </section>
 
-            <section className="grid gap-6 rounded-3xl border border-border/70 bg-card p-5 md:grid-cols-2">
-                <div className="space-y-2">
+            <section className="grid gap-6 rounded-xl bg-card border border-border p-7 shadow-neo md:grid-cols-2">
+                <div className="space-y-3">
                     <Label htmlFor="ensName">ENS domain</Label>
                     <Input id="ensName" placeholder="myapp.eth" {...form.register("ensName")} />
-                    {form.formState.errors.ensName ? <p className="text-sm text-destructive">{form.formState.errors.ensName.message}</p> : null}
+                    {form.formState.errors.ensName ? <p className="text-sm text-destructive font-semibold">{form.formState.errors.ensName.message}</p> : null}
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-3">
                     <Label htmlFor="ensPrivateKey">ENS private key</Label>
                     <Input id="ensPrivateKey" type="password" placeholder="0x..." {...form.register("ensPrivateKey")} />
                     {form.formState.errors.ensPrivateKey ? (
-                        <p className="text-sm text-destructive">{form.formState.errors.ensPrivateKey.message}</p>
-                    ) : null}
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="ethereumRpcUrl">Ethereum RPC URL</Label>
-                    <Input id="ethereumRpcUrl" placeholder={DEFAULT_RPC} {...form.register("ethereumRpcUrl")} />
-                    {form.formState.errors.ethereumRpcUrl ? (
-                        <p className="text-sm text-destructive">{form.formState.errors.ethereumRpcUrl.message}</p>
+                        <p className="text-sm text-destructive font-semibold">{form.formState.errors.ensPrivateKey.message}</p>
                     ) : null}
                 </div>
             </section>
 
-            <section className="space-y-4 rounded-3xl border border-border/70 bg-card p-5">
-                <div>
-                    <p className="text-sm font-semibold uppercase tracking-wide text-primary">Build configuration</p>
-                    <p className="text-sm text-muted-foreground">Customize how FilShip builds and exports your project.</p>
-                </div>
-                <div className="grid gap-4 md:grid-cols-2">
+            {/* Build Configuration - Only for Next.js */}
+            {selectedFramework === "nextjs" && (
+                <section className="space-y-5 rounded-xl bg-card border border-border p-7 shadow-neo">
                     <div className="space-y-2">
-                        <Label htmlFor="buildCommand">Build command</Label>
-                        <Input id="buildCommand" {...form.register("buildCommand")} />
-                        {form.formState.errors.buildCommand ? (
-                            <p className="text-sm text-destructive">{form.formState.errors.buildCommand.message}</p>
-                        ) : null}
+                        <p className="text-sm font-bold uppercase tracking-wide text-primary">Build configuration</p>
+                        <p className="text-sm font-medium text-muted-foreground leading-relaxed">Customize how Filify builds and exports your Next.js project.</p>
                     </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="outputDir">Output directory</Label>
-                        <Input id="outputDir" {...form.register("outputDir")} />
-                        {form.formState.errors.outputDir ? (
-                            <p className="text-sm text-destructive">{form.formState.errors.outputDir.message}</p>
-                        ) : null}
+                    <div className="grid gap-5 md:grid-cols-2">
+                        <div className="space-y-3">
+                            <Label htmlFor="buildCommand">Build command</Label>
+                            <Input 
+                                id="buildCommand" 
+                                placeholder="npm run build"
+                                defaultValue="npm run build"
+                                {...form.register("buildCommand")} 
+                            />
+                            {form.formState.errors.buildCommand ? (
+                                <p className="text-sm text-destructive font-semibold">{form.formState.errors.buildCommand.message}</p>
+                            ) : null}
+                        </div>
+                        <div className="space-y-3">
+                            <Label htmlFor="outputDir">Output directory</Label>
+                            <Input 
+                                id="outputDir" 
+                                placeholder="out"
+                                defaultValue="out"
+                                {...form.register("outputDir")} 
+                            />
+                            {form.formState.errors.outputDir ? (
+                                <p className="text-sm text-destructive font-semibold">{form.formState.errors.outputDir.message}</p>
+                            ) : null}
+                        </div>
                     </div>
-                </div>
-            </section>
+                </section>
+            )}
 
-            <Button type="submit" size="lg" className="w-full" disabled={form.formState.isSubmitting || !selectedRepo}>
+            <Button type="submit" size="lg" className="w-full shadow-neo-lg" disabled={form.formState.isSubmitting || !selectedRepo}>
                 {form.formState.isSubmitting ? "Creating project..." : "Create project"}
             </Button>
         </form>
