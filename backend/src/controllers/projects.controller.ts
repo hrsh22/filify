@@ -129,6 +129,22 @@ export class ProjectsController {
 
       // Encrypt sensitive data
       const encryptedENSKey = encryptionService.encrypt(ensPrivateKey);
+      const secretPlain = webhookSecretService.generate();
+      const encryptedSecret = webhookSecretService.encrypt(secretPlain);
+      const webhookUrl = getWebhookUrl();
+      const selectedBranch = repoBranch || 'main';
+
+      logger.debug('Registering GitHub webhook during project creation', {
+        repoName,
+        webhookUrl,
+        selectedBranch,
+      });
+      await githubService.registerWebhook(user.githubToken, repoName, webhookUrl, secretPlain);
+      logger.info('Webhook registered automatically for project', {
+        repoName,
+        webhookUrl,
+        selectedBranch,
+      });
 
       const projectId = generateId();
       const project = await db
@@ -139,15 +155,15 @@ export class ProjectsController {
           name,
           repoName,
           repoUrl,
-          repoBranch: repoBranch || 'main',
-          autoDeployBranch: repoBranch || 'main',
+          repoBranch: selectedBranch,
+          autoDeployBranch: selectedBranch,
           ensName,
           ensPrivateKey: encryptedENSKey,
           ethereumRpcUrl,
           buildCommand: buildCommand || null,
           outputDir: outputDir || null,
-          webhookEnabled: false,
-          webhookSecret: null,
+          webhookEnabled: true,
+          webhookSecret: encryptedSecret,
           createdAt: new Date(),
           updatedAt: new Date(),
         })

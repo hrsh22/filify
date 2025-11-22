@@ -18,14 +18,14 @@
 
 ## Application Overview
 
-**Last Updated**: 2025-11-21
+**Last Updated**: 2025-11-22
 
 Filify is a decentralized deployment platform that enables developers to deploy web applications to Filecoin storage and serve them via Ethereum Name Service (ENS) domains.
 
 ### Core Workflow
 
 1. User authenticates via GitHub OAuth
-2. User creates a project linking a GitHub repository, ENS settings, and (optionally) auto-deploy branch + webhook
+2. User creates a project linking a GitHub repository, ENS settings, and choosing an auto-deploy branch while the GitHub webhook is registered automatically
 3. Manual deployments can be triggered from the dashboard/project page
 4. Auto-deployments fire when GitHub sends a push webhook; the backend enqueues a build job per project
 5. Backend clones the repository, builds it, and stores build artifacts for up to 24h
@@ -74,7 +74,7 @@ Filify is a decentralized deployment platform that enables developers to deploy 
 - Deployment history viewing
 - Resume failed deployments capability
 - Auto-deploy polling that uploads backend-built artifacts automatically when webhooks fire
-- Project settings UI for enabling/disabling GitHub push webhooks and choosing the auto-deploy branch
+- Project settings UI for monitoring GitHub push webhook status, switching the auto-deploy branch, or disabling auto-deploy if needed
 
 **Components**:
 
@@ -144,7 +144,7 @@ Filify is a decentralized deployment platform that enables developers to deploy 
 - **Build Configuration**: Custom build commands and output directories
 - **ENS Configuration**: Domain name and private key (encrypted)
 
-**Current State**: Full CRUD operations for projects. Users can create projects by selecting GitHub repositories and branches, configure ENS + build settings, and opt into auto-deploy by selecting a branch and enabling the GitHub webhook toggle from the project detail view. Project history shows all deployments with trigger provenance and commit metadata.
+**Current State**: Full CRUD operations for projects. When users create a project, they select a GitHub repository/branch, configure ENS + build settings, and the backend automatically registers the GitHub webhook for auto-deploy using the selected branch. Project settings allow switching the auto-deploy branch or disabling the webhook entirely. Project history shows all deployments with trigger provenance and commit metadata.
 
 ### Build Process
 
