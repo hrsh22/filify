@@ -204,7 +204,8 @@ export async function buildCarFromDirectory(
   const blockstore = new MemoryBlockstore();
   let rootCid: CID | null = null;
 
-  const { importer } = await import('ipfs-unixfs-importer');
+  const importerModule = await new Function('specifier', 'return import(specifier);')('ipfs-unixfs-importer');
+  const { importer } = importerModule;
   for await (const entry of importer(iterateFiles(sourceDir, sourceDir), blockstore as any, {
     cidVersion: 1,
     wrapWithDirectory: true,
