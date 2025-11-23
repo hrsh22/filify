@@ -1,5 +1,5 @@
 import { StrictMode } from 'react'
-import { BrowserRouter } from 'react-router-dom'
+import { HashRouter } from 'react-router-dom'
 import { createRoot } from 'react-dom/client'
 import { Toaster } from 'sonner'
 import './index.css'
@@ -18,7 +18,7 @@ if (!root) {
 
 createRoot(root).render(
   <StrictMode>
-    <BrowserRouter>
+    <HashRouter>
       <WalletProvider>
         <FilecoinPinProvider>
           <AuthProvider>
@@ -31,6 +31,6 @@ createRoot(root).render(
           </AuthProvider>
         </FilecoinPinProvider>
       </WalletProvider>
-    </BrowserRouter>
+    </HashRouter>
   </StrictMode>
 )

@@ -44,14 +44,30 @@ const parseQueryParamNumber = (value: string | null): number | null => {
   return parsed
 }
 
+const getSearchParams = (): URLSearchParams => {
+  const { search, hash } = window.location
+
+  if (search.length > 0) {
+    return new URLSearchParams(search)
+  }
+
+  const queryStart = hash.indexOf('?')
+
+  if (queryStart === -1) {
+    return new URLSearchParams()
+  }
+
+  return new URLSearchParams(hash.slice(queryStart + 1))
+}
+
 /**
- * Parse debug parameters from URL query string.
+ * Parse debug parameters from URL query string (hash-based router aware).
  * When no providerId is provided, Synapse will handle provider selection automatically.
  *
  * @returns Object with providerId and dataSetId (null if not provided or invalid)
  */
 export function getDebugParams(): DebugParams {
-  const params = new URLSearchParams(window.location.search)
+  const params = getSearchParams()
 
   const providerIdParam = params.get('providerId')
   const dataSetId = params.get('dataSetId')

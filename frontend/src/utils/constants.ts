@@ -12,7 +12,9 @@ if (!FILECOIN_PRIVATE_KEY) {
 }
 
 // API Configuration
-export const BACKEND_URL = 'https://filify-backend.hrsh22.me';
+export const BACKEND_URL = import.meta.env.VITE_ENV === 'dev'
+    ? 'https://filify.hrsh22.me'
+    : 'https://filify-backend.hrsh22.me';
 export const API_URL = `${BACKEND_URL}/api`;
 
 // Ethereum/ENS Configuration
