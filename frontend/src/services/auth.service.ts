@@ -1,9 +1,10 @@
 import type { User } from '@/types'
 import { api } from './api'
+import { BACKEND_URL } from '@/utils/constants'
 
 export const authService = {
   login() {
-    window.location.href = `${import.meta.env.VITE_BACKEND_URL}/api/auth/github`
+    window.location.href = `${BACKEND_URL}/api/auth/github`
   },
   async logout() {
     await api.post('/auth/logout')

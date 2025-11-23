@@ -16,6 +16,7 @@ import { useNavigate } from "react-router-dom";
 import { projectsService } from "@/services/projects.service";
 import { useRepositories, useBranches } from "@/hooks/use-repositories";
 import { useEnsDomains } from "@/hooks/use-ens-domains";
+import { DEFAULT_ETHEREUM_RPC } from "@/utils/constants";
 
 const schema = z
     .object({
@@ -46,7 +47,7 @@ const schema = z
 
 type FormValues = z.infer<typeof schema>;
 
-const ETH_MAINNET_RPC = `https://eth-mainnet.g.alchemy.com/v2/0INEHyBWJeRtdwKOIIkaOW4Jnh92W6gB`;
+const ETH_MAINNET_RPC = DEFAULT_ETHEREUM_RPC;
 
 type Framework = "html" | "nextjs" | "vite";
 

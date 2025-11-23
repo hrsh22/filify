@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { THEGRAPH_API_KEY } from '@/utils/constants'
 
 export interface EnsDomain {
     name: string
@@ -45,16 +46,16 @@ const ENS_DOMAINS_QUERY = /* GraphQL */ `
   }
 `
 
+
 async function fetchEnsDomains(ownerAddress: string): Promise<EnsDomain[]> {
     const normalizedAddress = ownerAddress.toLowerCase()
 
-    const apiKey = import.meta.env.VITE_THEGRAPH_API_KEY
     const headers: HeadersInit = {
         'Content-Type': 'application/json',
     }
 
-    if (apiKey) {
-        headers.Authorization = `Bearer ${apiKey}`
+    if (THEGRAPH_API_KEY) {
+        headers.Authorization = `Bearer ${THEGRAPH_API_KEY}`
     }
 
     const response = await fetch(ENS_MAINNET_SUBGRAPH, {

@@ -4,14 +4,11 @@ import { WagmiProvider } from "wagmi";
 import { mainnet } from "@reown/appkit/networks";
 import { createAppKit, modal } from "@reown/appkit/react";
 import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
+import { REOWN_PROJECT_ID } from "@/utils/constants";
 
 const queryClient = new QueryClient();
 
-const projectId = import.meta.env.VITE_REOWN_PROJECT_ID;
-
-if (!projectId) {
-    throw new Error("VITE_REOWN_PROJECT_ID is required to initialize AppKit");
-}
+const projectId = REOWN_PROJECT_ID;
 
 const appUrl = typeof window === "undefined" ? "https://filify.app" : window.location.origin;
 
@@ -26,7 +23,7 @@ const networks = [mainnet] as [typeof mainnet];
 
 const wagmiAdapter = new WagmiAdapter({
     networks,
-    projectId,
+    projectId: projectId!,
     ssr: false
 });
 

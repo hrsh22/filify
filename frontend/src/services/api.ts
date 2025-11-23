@@ -1,16 +1,10 @@
 import axios from 'axios'
+import { API_URL } from '@/utils/constants'
 
-const DEFAULT_BACKEND_BASE_URL = import.meta.env.VITE_BACKEND_URL
 const unauthorizedListeners = new Set<() => void>()
 
-function getBackendBaseUrl() {
-  const configured = import.meta.env.VITE_BACKEND_URL
-  const base = configured && configured.length > 0 ? configured : DEFAULT_BACKEND_BASE_URL
-  return base.replace(/\/+$/, '')
-}
-
 export const api = axios.create({
-  baseURL: `${getBackendBaseUrl()}/api`,
+  baseURL: API_URL,
   withCredentials: true,
   timeout: 30_000,
   headers: {
