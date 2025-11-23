@@ -19,3 +19,7 @@ export const API_URL = `${BACKEND_URL}/api`;
 const ALCHEMY_KEY = '0INEHyBWJeRtdwKOIIkaOW4Jnh92W6gB';
 export const DEFAULT_ETHEREUM_RPC = `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`;
 export const THEGRAPH_API_KEY = 'b3e67bd270eaad7940b2d37c6e7331a9';
+
+// Filecoin Pin Advanced Configuration
+export const FILECOIN_RPC_URL: string | undefined = undefined; // Optional: Custom Filecoin RPC URL
+export const WARM_STORAGE_ADDRESS: string | undefined = undefined; // Optional: Warm storage address
