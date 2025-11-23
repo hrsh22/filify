@@ -14,6 +14,10 @@ const IGNORED_ENTRIES = new Set([
   '__MACOSX',
 ]);
 
+const dynamicImport = new Function('specifier', 'return import(specifier);') as (
+  specifier: string
+) => Promise<any>;
+
 interface DirectorySummary {
   totalFiles: number;
   totalDirectories: number;
@@ -161,7 +165,7 @@ async function* iterateFiles(
 }
 
 async function writeCarFile(blockstore: MemoryBlockstore, rootCid: CID, destination: string) {
-  const { CarWriter } = await import('@ipld/car/writer');
+  const { CarWriter } = await dynamicImport('@ipld/car/writer');
   await fs.mkdir(path.dirname(destination), { recursive: true });
   const output = createWriteStream(destination);
   const { writer, out } = await CarWriter.create([rootCid]);
@@ -204,8 +208,7 @@ export async function buildCarFromDirectory(
   const blockstore = new MemoryBlockstore();
   let rootCid: CID | null = null;
 
-  const importerModule = await new Function('specifier', 'return import(specifier);')('ipfs-unixfs-importer');
-  const { importer } = importerModule;
+  const { importer } = await dynamicImport('ipfs-unixfs-importer');
   for await (const entry of importer(iterateFiles(sourceDir, sourceDir), blockstore as any, {
     cidVersion: 1,
     wrapWithDirectory: true,
