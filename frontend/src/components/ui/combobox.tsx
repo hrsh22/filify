@@ -75,9 +75,9 @@ export function Combobox({
         }}
         disabled={disabled || loading}
         className={cn(
-          "w-full justify-between rounded-lg border border-border bg-input px-4 py-3 text-sm font-medium shadow-neo-inset transition-neo",
+          "w-full justify-between h-10",
           !selectedOption && "text-muted-foreground",
-          open && "ring-2 ring-primary glow-primary",
+          open && "ring-2 ring-ring",
           disabled && "opacity-50 cursor-not-allowed"
         )}
       >
@@ -88,7 +88,7 @@ export function Combobox({
       </Button>
 
       {open && (
-        <div className="absolute z-50 mt-2 w-full rounded-lg border border-border bg-card shadow-neo-lg">
+        <div className="absolute z-50 mt-2 w-full rounded-lg border border-border bg-popover shadow-elevated">
           <div className="relative p-2">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input
@@ -97,7 +97,7 @@ export function Combobox({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search..."
-              className="w-full rounded-lg bg-input pl-10 pr-4 py-2 text-sm font-medium shadow-neo-inset transition-neo focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="w-full rounded-lg border border-input bg-background pl-10 pr-4 py-2 text-sm transition-smooth focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
           </div>
           <div className="max-h-[300px] overflow-auto p-1">
@@ -114,10 +114,10 @@ export function Combobox({
                     type="button"
                     onClick={() => handleSelect(option.value)}
                     className={cn(
-                      "relative flex w-full cursor-pointer select-none items-center rounded-lg px-4 py-3 text-sm transition-neo",
+                      "relative flex w-full cursor-pointer select-none items-center rounded-lg px-4 py-3 text-sm transition-smooth outline-none",
                       isSelected
-                        ? "bg-primary/10 text-foreground"
-                        : "text-foreground hover:bg-muted/50"
+                        ? "bg-accent text-accent-foreground"
+                        : "hover:bg-accent/50"
                     )}
                   >
                     <div className="flex-1 text-left">
@@ -139,4 +139,3 @@ export function Combobox({
     </div>
   );
 }
-

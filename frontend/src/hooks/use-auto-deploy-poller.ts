@@ -107,7 +107,7 @@ export function useAutoDeployPoller(enabled = true) {
         await deploymentsService.confirmEns(deployment.id, txHash)
 
         const label = deployment.commitSha?.slice(0, 7) ?? deployment.id.slice(0, 6)
-        showToast(`Auto deployed ${label}`, 'success')
+        showToast(`Deployed ${label}`, 'success')
         console.log('[AutoDeployPoller] Deployment completed', { deploymentId: deployment.id, txHash })
         rejectionRef.current.delete(deployment.id)
       } catch (error) {
@@ -129,7 +129,7 @@ export function useAutoDeployPoller(enabled = true) {
         }
 
         console.error('[AutoDeployPoller] deployment failed', error)
-        showToast(`Auto deploy failed: ${message}`, 'error')
+        // Silently fail - no error toast
       } finally {
         inFlightRef.current.delete(deployment.id)
       }

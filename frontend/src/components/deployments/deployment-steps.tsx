@@ -53,7 +53,7 @@ const stepIcons: Record<string, React.ComponentType<{ className?: string }>> = {
 export function DeploymentSteps({ status }: { status: DeploymentStatus }) {
   const steps = status === 'failed' || status === 'cancelled' ? order.slice(0, 4) : order
   return (
-    <ol className="space-y-5">
+    <ol className="space-y-4">
       {steps.map((step, index) => {
         const state = getStepState(status, step)
         const Icon = stepIcons[step]
@@ -61,70 +61,69 @@ export function DeploymentSteps({ status }: { status: DeploymentStatus }) {
           <li key={step} className="flex items-start gap-4">
             <div className="relative flex-shrink-0">
               <div
-                className={`flex h-12 w-12 items-center justify-center rounded-lg font-bold text-sm shadow-neo-sm transition-neo ${
+                className={`flex h-10 w-10 items-center justify-center rounded-full border-2 font-semibold text-sm transition-smooth ${
                   state === 'complete'
-                    ? 'bg-cyan border border-cyan text-black'
+                    ? 'bg-success border-success text-success-foreground'
                     : state === 'active'
-                      ? 'bg-primary border border-primary text-black animate-pulse-glow'
-                      : 'bg-card/50 text-muted-foreground shadow-neo-inset'
+                      ? 'bg-primary border-primary text-primary-foreground animate-pulse-slow'
+                      : 'bg-background border-border text-muted-foreground'
                 }`}
               >
                 {state === 'complete' ? (
-                  <Check className="h-6 w-6" />
+                  <Check className="h-5 w-5" />
                 ) : state === 'active' ? (
-                  <Loader2 className="h-6 w-6 animate-spin" />
+                  <Loader2 className="h-5 w-5 animate-spin" />
                 ) : Icon ? (
-                  <Icon className="h-5 w-5" />
+                  <Icon className="h-4 w-4" />
                 ) : (
                   index + 1
                 )}
               </div>
               {index < steps.length - 1 && (
-                <div className={`absolute left-1/2 top-12 h-5 w-0.5 -translate-x-1/2 ${
-                  state === 'complete' ? 'bg-gradient-accent' : 'bg-muted/30'
+                <div className={`absolute left-1/2 top-10 h-4 w-0.5 -translate-x-1/2 ${
+                  state === 'complete' ? 'bg-success' : 'bg-border'
                 }`} />
               )}
             </div>
-            <div className="flex-1 pt-2">
-              <p className={`font-bold capitalize text-base ${
+            <div className="flex-1 pt-1.5">
+              <p className={`font-semibold text-sm ${
                 state === 'active' ? 'text-primary' : state === 'complete' ? 'text-foreground' : 'text-muted-foreground'
               }`}>
                 {labelMap[step]}
               </p>
-              <p className="text-sm font-medium text-muted-foreground mt-1">
+              <p className="text-xs text-muted-foreground mt-0.5">
                 {state === 'active'
                   ? 'In progress...'
                   : state === 'complete'
-                    ? 'Complete ✓'
+                    ? 'Complete'
                     : 'Pending'}
               </p>
             </div>
           </li>
         )
       })}
-      {status === 'failed' ? (
+      {status === 'failed' && (
         <li className="flex items-start gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-destructive/20 font-bold text-destructive shadow-neo-sm">
-            <XCircle className="h-6 w-6" />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-destructive bg-destructive text-destructive-foreground">
+            <XCircle className="h-5 w-5" />
           </div>
-          <div className="pt-2">
-            <p className="font-bold text-destructive text-base">Deployment failed</p>
-            <p className="text-sm font-medium text-muted-foreground mt-1">Check logs below for details.</p>
+          <div className="pt-1.5">
+            <p className="font-semibold text-sm text-destructive">Deployment failed</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Check logs below for details.</p>
           </div>
         </li>
-      ) : status === 'cancelled' ? (
+      )}
+      {status === 'cancelled' && (
         <li className="flex items-start gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-muted/30 font-bold text-muted-foreground shadow-neo-sm">
-            <AlertCircle className="h-6 w-6" />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-border bg-background text-muted-foreground">
+            <AlertCircle className="h-5 w-5" />
           </div>
-          <div className="pt-2">
-            <p className="font-bold text-base">Deployment cancelled</p>
-            <p className="text-sm font-medium text-muted-foreground mt-1">Cancelled before completion.</p>
+          <div className="pt-1.5">
+            <p className="font-semibold text-sm">Deployment cancelled</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Cancelled before completion.</p>
           </div>
         </li>
-      ) : null}
+      )}
     </ol>
   )
 }
-
-

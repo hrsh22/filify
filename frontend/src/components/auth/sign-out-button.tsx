@@ -23,7 +23,7 @@ export function SignOutButton({ label = 'Sign out', ...props }: SignOutButtonPro
       navigate('/')
     } catch (error) {
       console.error('[SignOutButton]', error)
-      showToast('Failed to sign out', 'error')
+      // Silently fail - no error toast
     } finally {
       setIsSubmitting(false)
     }

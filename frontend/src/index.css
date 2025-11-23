@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -18,68 +17,80 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
-  --color-cyan: var(--cyan);
-  --color-cyan-foreground: var(--cyan-foreground);
-  --color-blue: var(--blue);
-  --color-blue-foreground: var(--blue-foreground);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --radius-sm: calc(var(--radius) - 6px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 8px);
-  --radius-2xl: calc(var(--radius) + 12px);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
 }
 
 :root {
-  /* Retro dark theme with grid background */
-  --radius: 0.5rem;
+  /* Dark theme with black and vibrant orange accent */
+  --radius: 0.75rem;
   
-  /* Black background with grid */
-  --background: #000000;
-  --foreground: #e0e0e0;
+  /* Deep black background */
+  --background: #0a0a0a;
+  --foreground: #fafafa;
   
-  /* Gray card surfaces for contrast */
-  --card: #1a1a1a;
-  --card-foreground: #e0e0e0;
+  /* Slightly lighter card surfaces for depth */
+  --card: #121212;
+  --card-foreground: #fafafa;
   
   /* Popover surfaces */
-  --popover: #1a1a1a;
-  --popover-foreground: #e0e0e0;
+  --popover: #121212;
+  --popover-foreground: #fafafa;
   
-  /* Cyan primary - retro computing */
-  --primary: #00d4ff;
-  --primary-foreground: #000000;
+  /* Vibrant orange primary */
+  --primary: #ff6b35;
+  --primary-foreground: #0a0a0a;
   
-  /* Secondary surfaces */
-  --secondary: #262626;
-  --secondary-foreground: #e0e0e0;
+  /* Dark secondary surfaces */
+  --secondary: #1a1a1a;
+  --secondary-foreground: #fafafa;
   
   /* Muted elements */
-  --muted: #262626;
-  --muted-foreground: #888888;
+  --muted: #1a1a1a;
+  --muted-foreground: #a1a1a1;
   
-  /* Cyan/Blue accent colors */
-  --accent: #00d4ff;
-  --accent-foreground: #000000;
-  --cyan: #00d4ff;
-  --cyan-foreground: #000000;
-  --blue: #0ea5e9;
-  --blue-foreground: #000000;
+  /* Accent colors */
+  --accent: #1a1a1a;
+  --accent-foreground: #fafafa;
   
-  /* Destructive */
+  /* Success state */
+  --success: #10b981;
+  --success-foreground: #0a0a0a;
+  
+  /* Warning state - complementary orange */
+  --warning: #f59e0b;
+  --warning-foreground: #0a0a0a;
+  
+  /* Info state - lighter orange */
+  --info: #fb923c;
+  --info-foreground: #0a0a0a;
+  
+  /* Destructive/error state */
   --destructive: #ef4444;
+  --destructive-foreground: #fafafa;
   
-  /* Borders - cyan glow */
-  --border: rgba(0, 212, 255, 0.2);
+  /* Subtle borders */
+  --border: #262626;
   
   /* Input fields */
   --input: #1a1a1a;
   
-  /* Focus rings */
-  --ring: #00d4ff;
+  /* Focus rings - bright orange */
+  --ring: #ff6b35;
 }
 
 @layer base {
@@ -90,98 +101,111 @@
 
   body {
     @apply min-h-screen bg-background font-sans text-foreground antialiased;
-    background-image: 
-      linear-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px);
-    background-size: 50px 50px;
-    background-position: -1px -1px;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
+  }
+
+  h1 {
+    @apply text-4xl;
+  }
+
+  h2 {
+    @apply text-3xl;
+  }
+
+  h3 {
+    @apply text-2xl;
+  }
+
+  h4 {
+    @apply text-xl;
+  }
+
+  h5 {
+    @apply text-lg;
+  }
+
+  h6 {
+    @apply text-base;
   }
 }
 
 @layer utilities {
-  /* Neomorphic shadow utilities - soft depth */
-  .shadow-neo {
-    box-shadow: 
-      8px 8px 16px rgba(0, 0, 0, 0.4),
-      -8px -8px 16px rgba(255, 255, 255, 0.03);
+  /* Modern shadow utilities - enhanced for dark theme */
+  .shadow-subtle {
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.3);
   }
-  
-  .shadow-neo-sm {
-    box-shadow: 
-      4px 4px 8px rgba(0, 0, 0, 0.3),
-      -4px -4px 8px rgba(255, 255, 255, 0.02);
+
+  .shadow-soft {
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.3);
   }
-  
-  .shadow-neo-lg {
-    box-shadow: 
-      12px 12px 24px rgba(0, 0, 0, 0.5),
-      -12px -12px 24px rgba(255, 255, 255, 0.04);
+
+  .shadow-moderate {
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.3);
   }
-  
-  .shadow-neo-xl {
-    box-shadow: 
-      16px 16px 32px rgba(0, 0, 0, 0.6),
-      -16px -16px 32px rgba(255, 255, 255, 0.05);
+
+  .shadow-elevated {
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.4);
   }
-  
-  /* Inset shadows for pressed/input elements */
-  .shadow-neo-inset {
-    box-shadow: 
-      inset 4px 4px 8px rgba(0, 0, 0, 0.4),
-      inset -4px -4px 8px rgba(255, 255, 255, 0.02);
+
+  .shadow-high {
+    box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.6), 0 8px 10px -6px rgb(0 0 0 / 0.5);
   }
-  
-  .shadow-neo-inset-lg {
-    box-shadow: 
-      inset 6px 6px 12px rgba(0, 0, 0, 0.5),
-      inset -6px -6px 12px rgba(255, 255, 255, 0.03);
-  }
-  
-  /* Glow effects for accents */
+
+  /* Orange glow effects */
   .glow-primary {
-    box-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
+    box-shadow: 0 0 20px rgba(255, 107, 53, 0.4);
   }
-  
-  .glow-cyan {
-    box-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
+
+  .glow-primary-strong {
+    box-shadow: 0 0 30px rgba(255, 107, 53, 0.6);
   }
-  
-  .glow-blue {
-    box-shadow: 0 0 20px rgba(14, 165, 233, 0.4);
-  }
-  
+
   /* Smooth transitions */
-  .transition-neo {
+  .transition-smooth {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .transition-smooth-slow {
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  
-  .transition-neo-fast {
-    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  
+
   /* Hover lift effect */
   .hover-lift {
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  
+
   .hover-lift:hover {
     transform: translateY(-2px);
-    box-shadow: 
-      10px 10px 20px rgba(0, 0, 0, 0.5),
-      -10px -10px 20px rgba(255, 255, 255, 0.04);
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.4);
   }
-  
-  /* Pressed effect */
-  .active-press:active {
-    transform: translateY(1px);
-    box-shadow: 
-      inset 4px 4px 8px rgba(0, 0, 0, 0.4),
-      inset -4px -4px 8px rgba(255, 255, 255, 0.02);
+
+  /* Focus visible for accessibility */
+  .focus-visible-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
   }
 }
 
 @layer components {
-  /* Shimmer animation for loading states */
+  /* Smooth fade-in animation */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Subtle shimmer for loading states - dark theme */
   @keyframes shimmer {
     0% {
       background-position: -200% 0;
@@ -190,48 +214,40 @@
       background-position: 200% 0;
     }
   }
-  
+
   .animate-shimmer {
     animation: shimmer 2s infinite linear;
     background: linear-gradient(
       90deg,
       transparent 0%,
-      rgba(255, 255, 255, 0.05) 50%,
+      rgba(255, 107, 53, 0.08) 50%,
       transparent 100%
     );
     background-size: 200% 100%;
   }
-  
-  /* Fade in animation */
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-  
-  .animate-fade-in {
-    animation: fadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  
-  /* Pulse glow animation */
-  @keyframes pulseGlow {
+
+  /* Pulse animation for status indicators */
+  @keyframes pulse {
     0%, 100% {
-      box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+      opacity: 1;
     }
     50% {
-      box-shadow: 0 0 30px rgba(0, 212, 255, 0.5);
+      opacity: 0.5;
     }
   }
-  
-  .animate-pulse-glow {
-    animation: pulseGlow 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+
+  .animate-pulse-slow {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
-  
-  /* Gradient backgrounds */
-  /* Removed gradients for retro theme - using solid colors with borders */
+
+  /* Spin animation for loaders */
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .animate-spin {
+    animation: spin 1s linear infinite;
+  }
 }

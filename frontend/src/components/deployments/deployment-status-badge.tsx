@@ -1,13 +1,13 @@
 import type { DeploymentStatus } from '@/types'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, CheckCircle2, XCircle, AlertCircle } from 'lucide-react'
+import { Loader2, CheckCircle2, XCircle, AlertCircle, Clock } from 'lucide-react'
 
-const badgeVariants: Record<DeploymentStatus, 'default' | 'success' | 'warning' | 'destructive'> = {
+const badgeVariants: Record<DeploymentStatus, 'default' | 'success' | 'warning' | 'destructive' | 'info'> = {
   pending_build: 'warning',
-  cloning: 'warning',
-  building: 'warning',
+  cloning: 'info',
+  building: 'info',
   pending_upload: 'warning',
-  uploading: 'warning',
+  uploading: 'info',
   awaiting_signature: 'warning',
   awaiting_confirmation: 'warning',
   success: 'success',
@@ -16,12 +16,12 @@ const badgeVariants: Record<DeploymentStatus, 'default' | 'success' | 'warning' 
 }
 
 const statusIcons: Record<DeploymentStatus, React.ReactNode> = {
-  pending_build: <Loader2 className="h-3.5 w-3.5 animate-spin" />,
+  pending_build: <Clock className="h-3.5 w-3.5" />,
   cloning: <Loader2 className="h-3.5 w-3.5 animate-spin" />,
   building: <Loader2 className="h-3.5 w-3.5 animate-spin" />,
-  pending_upload: <Loader2 className="h-3.5 w-3.5 animate-spin" />,
+  pending_upload: <Clock className="h-3.5 w-3.5" />,
   uploading: <Loader2 className="h-3.5 w-3.5 animate-spin" />,
-  awaiting_signature: <Loader2 className="h-3.5 w-3.5 animate-spin" />,
+  awaiting_signature: <Clock className="h-3.5 w-3.5" />,
   awaiting_confirmation: <Loader2 className="h-3.5 w-3.5 animate-spin" />,
   success: <CheckCircle2 className="h-3.5 w-3.5" />,
   failed: <XCircle className="h-3.5 w-3.5" />,
@@ -29,10 +29,10 @@ const statusIcons: Record<DeploymentStatus, React.ReactNode> = {
 }
 
 const labelMap: Partial<Record<DeploymentStatus, string>> = {
-  pending_build: 'Building…',
-  pending_upload: 'Uploading…',
+  pending_build: 'Queued',
+  pending_upload: 'Ready to upload',
   awaiting_signature: 'Awaiting signature',
-  awaiting_confirmation: 'Confirming…',
+  awaiting_confirmation: 'Confirming',
 }
 
 export function DeploymentStatusBadge({ status }: { status: DeploymentStatus }) {
@@ -40,11 +40,9 @@ export function DeploymentStatusBadge({ status }: { status: DeploymentStatus }) 
   const icon = statusIcons[status] ?? <Loader2 className="h-3.5 w-3.5 animate-spin" />
   const variant = badgeVariants[status] ?? 'warning'
   return (
-    <Badge variant={variant} className="capitalize">
+    <Badge variant={variant} className="capitalize inline-flex items-center gap-1.5">
       {icon}
-      {label}
+      <span>{label}</span>
     </Badge>
   )
 }
-
-

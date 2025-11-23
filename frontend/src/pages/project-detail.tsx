@@ -2,10 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { AxiosError } from "axios";
 import { useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft, Rocket, ExternalLink, Globe, GitBranch, Terminal, FolderOutput, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useProject } from "@/hooks/use-project";
 import { deploymentsService } from "@/services/deployments.service";
 import { projectsService } from "@/services/projects.service";
@@ -47,15 +52,15 @@ export function ProjectDetailPage() {
             setWebhookUpdating(true);
             if (project.webhookEnabled) {
                 await projectsService.disableWebhook(project.id);
-                showToast("Auto deploy disabled", "info");
+                showToast("Webhook disabled", "info");
             } else {
                 await projectsService.enableWebhook(project.id, selectedBranch);
-                showToast("Auto deploy enabled", "success");
+                showToast("Webhook enabled", "success");
             }
             await refresh();
         } catch (error) {
             console.error("[ProjectDetail][webhook]", error);
-            showToast("Failed to update webhook settings", "error");
+            // Silently fail - no error toast
         } finally {
             setWebhookUpdating(false);
         }
@@ -71,11 +76,11 @@ export function ProjectDetailPage() {
         try {
             setBranchSaving(true);
             await projectsService.update(project.id, { autoDeployBranch: branch });
-            showToast("Auto deploy branch updated", "success");
+            showToast("Branch updated", "success");
             await refresh();
         } catch (error) {
             console.error("[ProjectDetail][branch]", error);
-            showToast("Failed to update branch", "error");
+            // Silently fail - no error toast
         } finally {
             setBranchSaving(false);
         }
@@ -101,7 +106,7 @@ export function ProjectDetailPage() {
             })
             .catch((error) => {
                 console.error("[ProjectDetail][branches]", error);
-                showToast("Failed to load branches from GitHub", "error");
+                // Silently fail - no error toast
             })
             .finally(() => setBranchLoading(false));
     }, [project?.repoName, showToast]);
@@ -115,11 +120,7 @@ export function ProjectDetailPage() {
             navigate(`/deployments/${deploymentId}`);
         } catch (err) {
             console.error("[ProjectDetail][deploy]", err);
-            let message = "Failed to start deployment";
-            if (err instanceof AxiosError) {
-                message = (err.response?.data as { message?: string })?.message ?? message;
-            }
-            showToast(message, "error");
+            // Silently fail - no error toast
         } finally {
             setIsDeploying(false);
         }
@@ -128,7 +129,7 @@ export function ProjectDetailPage() {
     if (loading) {
         return (
             <div className="flex min-h-[50vh] items-center justify-center">
-                <Spinner className="h-10 w-10 border-t-primary" />
+                <Spinner size="lg" />
             </div>
         );
     }
@@ -136,8 +137,11 @@ export function ProjectDetailPage() {
     if (error) {
         return (
             <div className="space-y-4">
-                <p className="text-destructive">{error}</p>
+                <Alert variant="destructive">
+                    <AlertDescription>{error}</AlertDescription>
+                </Alert>
                 <Button variant="outline" onClick={() => navigate("/dashboard")}>
+                    <ArrowLeft className="h-4 w-4" />
                     Back to dashboard
                 </Button>
             </div>
@@ -153,166 +157,220 @@ export function ProjectDetailPage() {
         : [selectedBranch, ...branchOptions.filter((branch) => branch !== selectedBranch)];
 
     return (
-        <div className="space-y-8">
-            <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="space-y-6">
+            {/* Page Header */}
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                 <div className="space-y-2">
-                    <p className="text-sm font-bold uppercase tracking-wide text-cyan">Project</p>
-                    <h2 className="text-4xl font-bold text-foreground">{project.name}</h2>
-                    <p className="text-base font-medium text-muted-foreground">{project.repoName}</p>
-                </div>
-                <div className="flex flex-wrap gap-3">
-                    <Button variant="ghost" onClick={() => navigate("/dashboard")}>
+                    <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard")} className="pl-0">
+                        <ArrowLeft className="h-4 w-4" />
                         Back
                     </Button>
-                    <Button onClick={handleDeploy} disabled={isDeploying || projectBusy} size="lg" className="shadow-neo">
-                        {isDeploying ? "Deploying..." : projectBusy ? "Deployment running" : "Deploy now"}
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Rocket className="h-5 w-5 text-primary" />
+                        <span className="text-sm font-medium text-primary">Project</span>
+                    </div>
+                    <h1 className="text-4xl font-bold tracking-tight">{project.name}</h1>
+                    <a
+                        href={project.repoUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-smooth">
+                        {project.repoName}
+                        <ExternalLink className="h-4 w-4" />
+                    </a>
                 </div>
+                <Button onClick={handleDeploy} disabled={isDeploying || projectBusy} size="lg">
+                    <Rocket className="h-4 w-4" />
+                    {isDeploying ? "Deploying..." : projectBusy ? "Deployment running" : "Deploy now"}
+                </Button>
             </div>
 
-            {projectBusy ? (
-                <div className="flex items-start gap-3 rounded-xl bg-primary/10 p-5 text-primary border border-primary/20 shadow-neo-sm">
-                    <p className="text-sm font-semibold">
-                        A deployment is currently running. Cancel it or wait until it completes before starting a new one.
-                    </p>
-                </div>
-            ) : null}
+            {projectBusy && (
+                <Alert variant="info">
+                    <AlertDescription>A deployment is currently running. Wait until it completes before starting a new one.</AlertDescription>
+                </Alert>
+            )}
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Auto Deploy</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-5">
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                        <div className="space-y-2">
-                            <p className="text-sm font-medium text-muted-foreground">
-                                Enable GitHub webhooks to trigger deployments whenever you push to the selected branch.
-                            </p>
-                            <div className="flex flex-wrap items-center gap-3">
-                                <Badge variant={project.webhookEnabled ? "success" : "outline"}>
-                                    {project.webhookEnabled ? "Webhook Active" : "Webhook Inactive"}
-                                </Badge>
-                                <span className="text-xs font-semibold text-muted-foreground">
-                                    Branch: <span className="text-foreground">{project.autoDeployBranch ?? project.repoBranch ?? "main"}</span>
-                                </span>
-                            </div>
-                        </div>
-                        <Button onClick={handleWebhookToggle} disabled={webhookUpdating} variant={project.webhookEnabled ? "outline" : "default"}>
-                            {webhookUpdating ? "Saving…" : project.webhookEnabled ? "Disable Auto Deploy" : "Enable Auto Deploy"}
-                        </Button>
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Auto Deploy Branch</label>
-                        <select
-                            value={selectedBranch}
-                            onChange={(event) => handleBranchChange(event.target.value)}
-                            disabled={branchLoading || branchSaving || webhookUpdating}
-                            className="w-full rounded-lg border border-border bg-card/50 p-2 text-sm font-semibold shadow-neo-sm focus:outline-none focus:ring-2 focus:ring-primary">
-                            {branchValues.map((branch) => (
-                                <option key={branch} value={branch}>
-                                    {branch}
-                                </option>
-                            ))}
-                        </select>
-                        {branchLoading ? <p className="text-xs text-muted-foreground">Loading branches…</p> : null}
-                    </div>
-                    <p className="text-xs font-medium text-muted-foreground">
-                        Your project will automatically deploy when you push to the selected branch.
-                    </p>
-                </CardContent>
-            </Card>
+            <Separator />
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Configuration</CardTitle>
-                </CardHeader>
-                <CardContent className="grid gap-4 md:grid-cols-2">
-                    <div>
-                        <p className="text-sm font-medium text-muted-foreground">Repository</p>
-                        <a
-                            href={project.repoUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="font-bold text-foreground underline-offset-4 hover:underline">
-                            {project.repoName}
-                        </a>
-                        <p className="text-xs font-medium text-muted-foreground">Branch: {project.repoBranch}</p>
-                    </div>
-                    <div>
-                        <p className="text-sm font-medium text-muted-foreground">ENS</p>
-                        <p className="font-bold">{project.ensName}</p>
-                    </div>
-                    {project.buildCommand ? (
-                        <div>
-                            <p className="text-sm font-medium text-muted-foreground">Build command</p>
-                            <p className="font-mono text-xs font-bold">{project.buildCommand}</p>
-                        </div>
-                    ) : null}
-                    {project.outputDir ? (
-                        <div>
-                            <p className="text-sm font-medium text-muted-foreground">Output directory</p>
-                            <p className="font-mono text-xs font-bold">{project.outputDir}</p>
-                        </div>
-                    ) : null}
-                </CardContent>
-            </Card>
+            {/* Tabs */}
+            <Tabs defaultValue="overview" className="space-y-6">
+                <TabsList>
+                    <TabsTrigger value="overview">Overview</TabsTrigger>
+                    <TabsTrigger value="deployments">Deployments</TabsTrigger>
+                    <TabsTrigger value="settings">Settings</TabsTrigger>
+                </TabsList>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Deployment history</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    {project.deployments && project.deployments.length > 0 ? (
-                        project.deployments.map((deployment) => (
-                            <div
-                                key={deployment.id}
-                                className="group rounded-xl bg-card/50 px-6 py-5 shadow-neo-sm transition-neo hover:shadow-neo hover:-translate-y-1">
-                                <div className="flex flex-wrap items-center justify-between gap-4">
-                                    <div className="space-y-2">
-                                        <DeploymentStatusBadge status={deployment.status} />
-                                        {deployment.triggeredBy ? (
-                                            <Badge variant="outline" className="uppercase text-[10px] tracking-wide">
-                                                {deployment.triggeredBy === "webhook" ? "Auto" : "Manual"}
-                                            </Badge>
-                                        ) : null}
-                                        <p className="text-sm font-medium text-muted-foreground">
-                                            {formatDistanceToNow(new Date(deployment.createdAt), { addSuffix: true })}
-                                        </p>
-                                        {deployment.commitSha ? (
-                                            <a
-                                                href={`${project.repoUrl}/commit/${deployment.commitSha}`}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="block text-xs font-semibold text-cyan underline-offset-4 hover:underline">
-                                                {deployment.commitSha.slice(0, 7)} –{" "}
-                                                {deployment.commitMessage
-                                                    ? `${deployment.commitMessage.slice(0, 40)}${deployment.commitMessage.length > 40 ? "…" : ""}`
-                                                    : "View commit"}
-                                            </a>
-                                        ) : null}
-                                        {deployment.ipfsCid ? (
-                                            <a
-                                                href={`https://${deployment.ipfsCid}.ipfs.dweb.link`}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="block text-sm text-cyan underline-offset-4 hover:underline font-semibold">
-                                                IPFS: {deployment.ipfsCid.slice(0, 12)}...
-                                            </a>
-                                        ) : null}
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <Button variant="outline" size="sm" onClick={() => navigate(`/deployments/${deployment.id}`)}>
-                                            View status
-                                        </Button>
+                <TabsContent value="overview" className="space-y-4">
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardDescription className="flex items-center gap-2">
+                                    <Globe className="h-4 w-4" />
+                                    ENS Domain
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <p className="text-lg font-semibold text-primary">{project.ensName}</p>
+                            </CardContent>
+                        </Card>
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardDescription className="flex items-center gap-2">
+                                    <GitBranch className="h-4 w-4" />
+                                    Branch
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <p className="text-lg font-semibold">{project.repoBranch}</p>
+                            </CardContent>
+                        </Card>
+                        {project.buildCommand && (
+                            <Card>
+                                <CardHeader className="pb-2">
+                                    <CardDescription className="flex items-center gap-2">
+                                        <Terminal className="h-4 w-4" />
+                                        Build Command
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <p className="text-sm font-mono truncate">{project.buildCommand}</p>
+                                </CardContent>
+                            </Card>
+                        )}
+                        {project.outputDir && (
+                            <Card>
+                                <CardHeader className="pb-2">
+                                    <CardDescription className="flex items-center gap-2">
+                                        <FolderOutput className="h-4 w-4" />
+                                        Output Directory
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <p className="text-sm font-mono truncate">{project.outputDir}</p>
+                                </CardContent>
+                            </Card>
+                        )}
+                    </div>
+                </TabsContent>
+
+                <TabsContent value="deployments" className="space-y-4">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Deployment History</CardTitle>
+                            <CardDescription>All deployments for this project</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            {project.deployments && project.deployments.length > 0 ? (
+                                <div className="space-y-3">
+                                    {project.deployments.map((deployment) => (
+                                        <div
+                                            key={deployment.id}
+                                            className="group rounded-lg border p-4 transition-smooth hover:border-primary/50 hover:bg-accent/50">
+                                            <div className="flex flex-wrap items-center justify-between gap-4">
+                                                <div className="space-y-2 flex-1">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <DeploymentStatusBadge status={deployment.status} />
+                                                        {deployment.triggeredBy && (
+                                                            <Badge variant="outline" className="text-xs">
+                                                                {deployment.triggeredBy === "webhook" ? "Auto" : "Manual"}
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                        <Clock className="h-3 w-3" />
+                                                        {formatDistanceToNow(new Date(deployment.createdAt), { addSuffix: true })}
+                                                    </div>
+                                                    {deployment.commitSha && (
+                                                        <a
+                                                            href={`${project.repoUrl}/commit/${deployment.commitSha}`}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="block text-xs text-primary hover:underline underline-offset-2 truncate">
+                                                            {deployment.commitSha.slice(0, 7)}
+                                                            {deployment.commitMessage &&
+                                                                ` – ${deployment.commitMessage.slice(0, 40)}${deployment.commitMessage.length > 40 ? "…" : ""}`}
+                                                        </a>
+                                                    )}
+                                                    {deployment.ipfsCid && (
+                                                        <a
+                                                            href={`https://${deployment.ipfsCid}.ipfs.dweb.link`}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="block text-xs text-primary hover:underline underline-offset-2">
+                                                            IPFS: {deployment.ipfsCid.slice(0, 12)}...
+                                                        </a>
+                                                    )}
+                                                </div>
+                                                <Button variant="outline" size="sm" onClick={() => navigate(`/deployments/${deployment.id}`)}>
+                                                    View
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-sm text-muted-foreground text-center py-8">No deployments yet.</p>
+                            )}
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="settings" className="space-y-4">
+                    <Card>
+                    <CardHeader>
+                        <CardTitle>Webhook Settings</CardTitle>
+                        <CardDescription>Enable GitHub webhooks to trigger deployments whenever you push to the selected branch.</CardDescription>
+                    </CardHeader>
+                        <CardContent className="space-y-6">
+                            <div className="flex flex-wrap items-center justify-between gap-4">
+                                <div className="space-y-2">
+                                    <div className="flex items-center gap-2">
+                                        <Badge variant={project.webhookEnabled ? "success" : "outline"}>
+                                            {project.webhookEnabled ? "Active" : "Inactive"}
+                                        </Badge>
+                                        <span className="text-sm text-muted-foreground">
+                                            Branch:{" "}
+                                            <span className="font-medium text-foreground">
+                                                {project.autoDeployBranch ?? project.repoBranch ?? "main"}
+                                            </span>
+                                        </span>
                                     </div>
                                 </div>
+                                <Button
+                                    onClick={handleWebhookToggle}
+                                    disabled={webhookUpdating}
+                                    variant={project.webhookEnabled ? "outline" : "default"}>
+                                    {webhookUpdating ? "Saving…" : project.webhookEnabled ? "Disable" : "Enable"}
+                                </Button>
                             </div>
-                        ))
-                    ) : (
-                        <p className="text-sm text-muted-foreground font-medium">No deployments yet.</p>
-                    )}
-                </CardContent>
-            </Card>
+
+                            <Separator />
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">Deployment Branch</label>
+                                <Select
+                                    value={selectedBranch}
+                                    onValueChange={handleBranchChange}
+                                    disabled={branchLoading || branchSaving || webhookUpdating}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select a branch" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {branchValues.map((branch) => (
+                                            <SelectItem key={branch} value={branch}>
+                                                {branch}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {branchLoading && <p className="text-xs text-muted-foreground">Loading branches…</p>}
+                                <p className="text-xs text-muted-foreground">Deployments will trigger automatically when you push to this branch.</p>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+            </Tabs>
         </div>
     );
 }

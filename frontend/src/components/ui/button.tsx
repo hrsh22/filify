@@ -1,41 +1,42 @@
-import { Slot } from '@radix-ui/react-slot'
-import { cva, type VariantProps } from 'class-variance-authority'
-import { cn } from '@/utils/cn'
-import type { ButtonHTMLAttributes } from 'react'
+import { Slot } from "@radix-ui/react-slot";
+import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "@/utils/cn";
+import type { ButtonHTMLAttributes, forwardRef } from "react";
+import * as React from "react";
 
-const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 rounded-lg text-sm font-semibold transition-neo focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed ring-offset-background active-press border',
-  {
-    variants: {
-      variant: {
-        default: 'bg-primary text-primary-foreground border-primary shadow-neo-sm hover:shadow-neo hover:-translate-y-0.5 hover:glow-primary',
-        secondary: 'bg-card text-foreground border-border shadow-neo-sm hover:shadow-neo hover:-translate-y-0.5 hover:border-primary',
-        outline: 'border-primary/50 bg-transparent text-primary hover:bg-primary/10 hover:shadow-neo-sm hover:-translate-y-0.5 hover:border-primary',
-        ghost: 'border-transparent hover:bg-muted/50 text-foreground hover:border-border',
-        destructive: 'bg-destructive text-white border-destructive shadow-neo-sm hover:shadow-neo hover:-translate-y-0.5 hover:brightness-110',
-        accent: 'bg-cyan text-cyan-foreground border-cyan shadow-neo-sm hover:shadow-neo hover:-translate-y-0.5 hover:glow-cyan',
-      },
-      size: {
-        default: 'px-5 py-2.5',
-        sm: 'px-3 py-2 text-xs',
-        lg: 'px-8 py-4 text-base',
-        icon: 'h-10 w-10 rounded-lg',
-      },
-    },
-    defaultVariants: {
-      variant: 'default',
-      size: 'default',
-    },
-  }
-)
+export const buttonVariants = cva(
+    "inline-flex items-center justify-center gap-2 rounded-lg text-sm font-medium transition-smooth focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed ring-offset-background whitespace-nowrap",
+    {
+        variants: {
+            variant: {
+                default: "bg-primary text-primary-foreground shadow-soft hover:bg-primary/90",
+                secondary: "bg-secondary text-secondary-foreground shadow-soft hover:bg-secondary/80",
+                outline: "border border-input bg-background shadow-soft hover:bg-accent hover:text-accent-foreground",
+                ghost: "hover:bg-accent hover:text-accent-foreground",
+                destructive: "bg-destructive text-destructive-foreground shadow-soft hover:bg-destructive/90",
+                link: "text-primary underline-offset-4 hover:underline"
+            },
+            size: {
+                default: "h-10 px-4 py-2",
+                sm: "h-9 rounded-md px-3 text-xs",
+                lg: "h-11 rounded-lg px-8",
+                icon: "h-10 w-10"
+            }
+        },
+        defaultVariants: {
+            variant: "default",
+            size: "default"
+        }
+    }
+);
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
-  asChild?: boolean
+    asChild?: boolean;
 }
 
-export const Button = ({ className, variant, size, asChild = false, ...props }: ButtonProps) => {
-  const Component = asChild ? Slot : 'button'
-  return <Component className={cn(buttonVariants({ variant, size, className }))} {...props} />
-}
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({ className, variant, size, asChild = false, ...props }, ref) => {
+    const Component = asChild ? Slot : "button";
+    return <Component className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props} />;
+});
 
-
+Button.displayName = "Button";

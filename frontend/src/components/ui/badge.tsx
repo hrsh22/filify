@@ -1,28 +1,29 @@
+import * as React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/utils/cn'
-import type { HTMLAttributes } from 'react'
 
-const badgeVariants = cva('inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold shadow-neo-sm transition-neo', {
+const badgeVariants = cva(
+  'inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-smooth focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+  {
   variants: {
     variant: {
-      default: 'bg-secondary text-secondary-foreground',
-      success: 'bg-emerald-500/20 text-emerald-400',
-      warning: 'bg-amber-500/20 text-amber-400',
-      destructive: 'bg-destructive/20 text-red-400',
-      outline: 'border border-border bg-card/50 text-foreground',
-      primary: 'bg-primary/20 text-primary',
-      accent: 'bg-cyan/20 text-cyan border border-cyan/30',
+        default: 'border-transparent bg-primary text-primary-foreground shadow-soft',
+        secondary: 'border-transparent bg-secondary text-secondary-foreground',
+        destructive: 'border-transparent bg-destructive text-destructive-foreground shadow-soft',
+        outline: 'text-foreground',
+        success: 'border-transparent bg-success text-success-foreground shadow-soft',
+        warning: 'border-transparent bg-warning text-warning-foreground shadow-soft',
+        info: 'border-transparent bg-info text-info-foreground shadow-soft',
     },
   },
   defaultVariants: {
     variant: 'default',
   },
-})
+  }
+)
 
-export interface BadgeProps extends HTMLAttributes<HTMLSpanElement>, VariantProps<typeof badgeVariants> {}
+export interface BadgeProps extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof badgeVariants> {}
 
 export function Badge({ className, variant, ...props }: BadgeProps) {
-  return <span className={cn(badgeVariants({ variant }), className)} {...props} />
+  return <div className={cn(badgeVariants({ variant }), className)} {...props} />
 }
-
-

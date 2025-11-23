@@ -1,19 +1,47 @@
-import { Terminal } from 'lucide-react'
+import { Terminal, Copy, Check } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useState } from 'react'
 
 export function DeploymentLogs({ logs }: { logs?: string | null }) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = () => {
+    if (logs) {
+      navigator.clipboard.writeText(logs)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
   return (
-    <div className="space-y-4 rounded-xl bg-card border border-border p-7 shadow-neo">
-      <div className="flex items-center gap-2">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary border border-primary shadow-neo-sm">
-          <Terminal className="h-4 w-4 text-white" />
-        </div>
-        <p className="text-sm font-bold uppercase tracking-wide text-primary">Build logs</p>
-      </div>
-      <pre className="max-h-[420px] overflow-auto rounded-xl bg-black/95 p-5 text-xs font-medium text-green-400 shadow-neo-inset font-mono leading-relaxed">
+    <Card>
+      <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Terminal className="h-4 w-4 text-primary" />
+          Build Logs
+        </CardTitle>
+        {logs && (
+          <Button variant="ghost" size="sm" onClick={handleCopy}>
+            {copied ? (
+              <>
+                <Check className="h-4 w-4" />
+                Copied
+              </>
+            ) : (
+              <>
+                <Copy className="h-4 w-4" />
+                Copy
+              </>
+            )}
+          </Button>
+        )}
+      </CardHeader>
+      <CardContent>
+        <pre className="max-h-[420px] overflow-auto rounded-lg bg-black p-4 text-xs text-green-400 font-mono leading-relaxed border">
         {logs ?? 'Logs will appear here once available.'}
       </pre>
-    </div>
+      </CardContent>
+    </Card>
   )
 }
-
-

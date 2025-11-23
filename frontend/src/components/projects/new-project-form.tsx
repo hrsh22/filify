@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Combobox } from "@/components/ui/combobox";
 import { useToast } from "@/context/toast-context";
 import { useNavigate } from "react-router-dom";
@@ -232,199 +233,209 @@ export function NewProjectForm() {
             navigate("/dashboard");
         } catch (error) {
             console.error("[NewProjectForm]", error);
-            showToast("Failed to create project", "error");
+            // Silently fail - no error toast
         }
     };
 
     return (
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             {/* Framework Selection */}
-            <section className="space-y-5 rounded-xl bg-card border border-border p-7 shadow-neo">
-                <div className="space-y-2">
-                    <Label>Framework</Label>
-                    <p className="text-xs text-muted-foreground">Select the framework for your project</p>
-                </div>
-                <div className="grid gap-3 md:grid-cols-2">
-                    {FRAMEWORKS.map((framework) => {
-                        const isSelected = selectedFramework === framework.value;
-                        const isComingSoon = framework.status === "coming-soon";
-                        return (
-                            <button
-                                key={framework.value}
-                                type="button"
-                                onClick={() => {
-                                    if (!isComingSoon) {
-                                        form.setValue("framework", framework.value);
-                                    }
-                                }}
-                                disabled={isComingSoon}
-                                className={`relative rounded-lg border p-4 text-left transition-neo ${
-                                    isSelected
-                                        ? "border-primary bg-primary/10 shadow-neo-sm"
-                                        : isComingSoon
-                                          ? "border-border bg-muted/20 opacity-60 cursor-not-allowed"
-                                          : "border-border bg-card hover:border-primary hover:shadow-neo-sm"
-                                }`}>
-                                <div className="flex items-center justify-between">
-                                    <span className="font-bold text-foreground">{framework.label}</span>
-                                    {isComingSoon ? (
-                                        <Badge variant="outline" className="text-xs">
-                                            Coming Soon
-                                        </Badge>
-                                    ) : isSelected ? (
-                                        <Badge variant="accent" className="text-xs">
-                                            Selected
-                                        </Badge>
-                                    ) : null}
-                                </div>
-                            </button>
-                        );
-                    })}
-                </div>
-                {form.formState.errors.framework && (
-                    <p className="text-sm text-destructive font-semibold">{form.formState.errors.framework.message}</p>
-                )}
-            </section>
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-lg">Framework</CardTitle>
+                    <p className="text-sm text-muted-foreground">Select the framework for your project</p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="grid gap-3 md:grid-cols-3">
+                        {FRAMEWORKS.map((framework) => {
+                            const isSelected = selectedFramework === framework.value;
+                            const isComingSoon = framework.status === "coming-soon";
+                            return (
+                                <button
+                                    key={framework.value}
+                                    type="button"
+                                    onClick={() => {
+                                        if (!isComingSoon) {
+                                            form.setValue("framework", framework.value);
+                                        }
+                                    }}
+                                    disabled={isComingSoon}
+                                    className={`relative rounded-lg border p-4 text-left transition-smooth ${
+                                        isSelected
+                                            ? "border-primary bg-primary/10"
+                                            : isComingSoon
+                                              ? "border-border bg-muted/20 opacity-60 cursor-not-allowed"
+                                              : "border-border hover:border-primary/50 hover:bg-accent/50"
+                                    }`}>
+                                    <div className="flex items-center justify-between">
+                                        <span className="font-semibold">{framework.label}</span>
+                                        {isComingSoon ? (
+                                            <Badge variant="outline" className="text-xs">
+                                                Soon
+                                            </Badge>
+                                        ) : isSelected ? (
+                                            <Badge className="text-xs">Selected</Badge>
+                                        ) : null}
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
+                    {form.formState.errors.framework && (
+                        <p className="text-sm text-destructive font-medium">{form.formState.errors.framework.message}</p>
+                    )}
+                </CardContent>
+            </Card>
 
             {/* Build Configuration */}
             {(selectedFramework === "nextjs" || selectedFramework === "vite") && (
-                <section className="space-y-5 rounded-xl bg-card border border-border p-7 shadow-neo">
-                    <div className="space-y-2">
-                        <p className="text-sm font-bold uppercase tracking-wide text-primary">Build configuration</p>
-                        <p className="text-sm font-medium text-muted-foreground leading-relaxed">
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-lg">Build Configuration</CardTitle>
+                        <p className="text-sm text-muted-foreground">
                             {selectedFramework === "nextjs"
                                 ? "Customize how Filify builds and exports your Next.js project."
                                 : "Customize how Filify builds your Vite project."}
                         </p>
-                    </div>
-                    <div className="grid gap-5 md:grid-cols-2">
-                        <div className="space-y-3">
-                            <Label htmlFor="buildCommand">Build command</Label>
-                            <Input id="buildCommand" placeholder="npm run build" {...form.register("buildCommand")} />
-                            {form.formState.errors.buildCommand ? (
-                                <p className="text-sm text-destructive font-semibold">{form.formState.errors.buildCommand.message}</p>
-                            ) : null}
+                    </CardHeader>
+                    <CardContent>
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <div className="space-y-2">
+                                <Label htmlFor="buildCommand">Build command</Label>
+                                <Input id="buildCommand" placeholder="npm run build" {...form.register("buildCommand")} />
+                                {form.formState.errors.buildCommand && (
+                                    <p className="text-sm text-destructive font-medium">{form.formState.errors.buildCommand.message}</p>
+                                )}
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="outputDir">Output directory</Label>
+                                <Input id="outputDir" placeholder={selectedFramework === "nextjs" ? "out" : "dist"} {...form.register("outputDir")} />
+                                {form.formState.errors.outputDir && (
+                                    <p className="text-sm text-destructive font-medium">{form.formState.errors.outputDir.message}</p>
+                                )}
+                            </div>
                         </div>
-                        <div className="space-y-3">
-                            <Label htmlFor="outputDir">Output directory</Label>
-                            <Input id="outputDir" placeholder={selectedFramework === "nextjs" ? "out" : "dist"} {...form.register("outputDir")} />
-                            {form.formState.errors.outputDir ? (
-                                <p className="text-sm text-destructive font-semibold">{form.formState.errors.outputDir.message}</p>
-                            ) : null}
-                        </div>
-                    </div>
-                </section>
+                    </CardContent>
+                </Card>
             )}
 
             {/* Repository Selection */}
-            <section className="space-y-5 rounded-xl bg-card border border-border p-7 shadow-neo">
-                <div className="space-y-3">
-                    <Label>GitHub repository</Label>
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-lg">GitHub Repository</CardTitle>
+                    <p className="text-sm text-muted-foreground">Connect your repository and configure the project</p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                        <Label>Repository</Label>
+                        <Combobox
+                            options={repoOptions}
+                            value={selectedRepo?.id.toString()}
+                            onValueChange={handleRepoSelect}
+                            placeholder="Search and select a repository..."
+                            disabled={reposLoading}
+                            loading={reposLoading}
+                            emptyMessage={reposError ? "Failed to load repositories" : "No repositories found"}
+                        />
+                        {reposError && (
+                            <p className="text-sm text-destructive">
+                                {reposError}{" "}
+                                <button type="button" className="underline font-semibold hover:text-destructive/80" onClick={() => refresh()}>
+                                    Retry
+                                </button>
+                            </p>
+                        )}
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                            <Label htmlFor="name">Project name</Label>
+                            <Input id="name" placeholder="My cool dapp" {...form.register("name")} />
+                            {form.formState.errors.name && (
+                                <p className="text-sm text-destructive font-medium">{form.formState.errors.name.message}</p>
+                            )}
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="branch">Branch</Label>
+                            <select
+                                id="branch"
+                                className="flex h-10 w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                disabled={!selectedRepo || branchesLoading}
+                                {...form.register("repoBranch")}>
+                                <option value="">{branchesLoading ? "Loading..." : "Select a branch"}</option>
+                                {branches.map((branch) => (
+                                    <option key={branch.name} value={branch.name}>
+                                        {branch.name}
+                                    </option>
+                                ))}
+                            </select>
+                            {form.formState.errors.repoBranch && (
+                                <p className="text-sm text-destructive font-medium">{form.formState.errors.repoBranch.message}</p>
+                            )}
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="frontendDir">Frontend directory (optional)</Label>
+                        <Input id="frontendDir" placeholder="e.g., frontend, web, app" {...form.register("frontendDir")} />
+                        <p className="text-xs text-muted-foreground">
+                            If your frontend code is in a subdirectory, specify the path relative to the repository root. Leave empty if the frontend
+                            is at the root.
+                        </p>
+                        {form.formState.errors.frontendDir && (
+                            <p className="text-sm text-destructive font-medium">{form.formState.errors.frontendDir.message}</p>
+                        )}
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <div className="flex items-start justify-between">
+                        <div className="space-y-1">
+                            <CardTitle className="text-lg">ENS Domain</CardTitle>
+                            <p className="text-sm text-muted-foreground">
+                                Select a domain owned by your connected wallet{walletDisplayName ? ` (${walletDisplayName})` : ""}
+                            </p>
+                        </div>
+                        <Button type="button" variant="outline" size="sm" onClick={() => void refreshEns()} disabled={!isWalletReady || ensLoading}>
+                            {ensLoading ? "Refreshing…" : "Refresh"}
+                        </Button>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
                     <Combobox
-                        options={repoOptions}
-                        value={selectedRepo?.id.toString()}
-                        onValueChange={handleRepoSelect}
-                        placeholder="Search and select a repository..."
-                        disabled={reposLoading}
-                        loading={reposLoading}
-                        emptyMessage={reposError ? "Failed to load repositories" : "No repositories found"}
+                        options={ensOptions}
+                        value={selectedEnsName}
+                        onValueChange={handleEnsSelect}
+                        placeholder={isWalletReady ? "Select an ENS domain..." : "Connect wallet to load ENS domains"}
+                        disabled={!isWalletReady || ensLoading || ensOptions.length === 0}
+                        loading={ensLoading}
+                        emptyMessage={isWalletReady ? "No ENS domains found for this wallet" : "Connect wallet to load ENS domains"}
                     />
-                    {reposError && (
-                        <p className="text-sm text-destructive">
-                            {reposError}{" "}
-                            <button type="button" className="underline font-semibold hover:text-destructive/80" onClick={() => refresh()}>
-                                Retry
-                            </button>
+                    {form.formState.errors.ensName && <p className="text-sm text-destructive font-medium">{form.formState.errors.ensName.message}</p>}
+                    {form.formState.errors.ensOwnerAddress && (
+                        <p className="text-sm text-destructive font-medium">{form.formState.errors.ensOwnerAddress.message}</p>
+                    )}
+                    {ensError && <p className="text-sm text-destructive font-medium">{ensError}</p>}
+                    {!ensLoading && isWalletReady && ensOptions.length === 0 && (
+                        <p className="text-sm text-muted-foreground">
+                            No ENS domains detected for this wallet. Visit{" "}
+                            <a
+                                href="https://app.ens.domains"
+                                target="_blank"
+                                rel="noreferrer"
+                                className="font-medium text-primary underline-offset-2 hover:underline">
+                                app.ens.domains
+                            </a>{" "}
+                            to register or manage your names.
                         </p>
                     )}
-                </div>
+                    {!isWalletReady && <p className="text-sm text-muted-foreground">Connect your Ethereum wallet to load available ENS domains.</p>}
+                    <input type="hidden" {...form.register("ensOwnerAddress")} />
+                </CardContent>
+            </Card>
 
-                <div className="grid gap-5 md:grid-cols-2">
-                    <div className="space-y-3">
-                        <Label htmlFor="name">Project name</Label>
-                        <Input id="name" placeholder="My cool dapp" {...form.register("name")} />
-                        {form.formState.errors.name ? (
-                            <p className="text-sm text-destructive font-semibold">{form.formState.errors.name.message}</p>
-                        ) : null}
-                    </div>
-                    <div className="space-y-3">
-                        <Label htmlFor="branch">Branch</Label>
-                        <select
-                            id="branch"
-                            className="w-full rounded-lg bg-input px-4 py-3 text-sm font-medium shadow-neo-inset transition-neo focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:glow-primary"
-                            disabled={!selectedRepo || branchesLoading}
-                            {...form.register("repoBranch")}>
-                            <option value="">{branchesLoading ? "Loading..." : "Select a branch"}</option>
-                            {branches.map((branch) => (
-                                <option key={branch.name} value={branch.name}>
-                                    {branch.name}
-                                </option>
-                            ))}
-                        </select>
-                        {form.formState.errors.repoBranch ? (
-                            <p className="text-sm text-destructive font-semibold">{form.formState.errors.repoBranch.message}</p>
-                        ) : null}
-                    </div>
-                </div>
-                <div className="space-y-3">
-                    <Label htmlFor="frontendDir">Frontend directory (optional)</Label>
-                    <Input id="frontendDir" placeholder="e.g., frontend, web, app" {...form.register("frontendDir")} />
-                    <p className="text-xs text-muted-foreground">
-                        If your frontend code is in a subdirectory, specify the path relative to the repository root. Leave empty if the frontend is
-                        at the root.
-                    </p>
-                    {form.formState.errors.frontendDir ? (
-                        <p className="text-sm text-destructive font-semibold">{form.formState.errors.frontendDir.message}</p>
-                    ) : null}
-                </div>
-            </section>
-
-            <section className="space-y-5 rounded-xl bg-card border border-border p-7 shadow-neo">
-                <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                    <div>
-                        <Label>ENS domain</Label>
-                        <p className="text-xs text-muted-foreground">
-                            Select a domain owned by your connected wallet{walletDisplayName ? ` (${walletDisplayName})` : ""}.
-                        </p>
-                    </div>
-                    <Button type="button" variant="outline" size="sm" onClick={() => void refreshEns()} disabled={!isWalletReady || ensLoading}>
-                        {ensLoading ? "Refreshing…" : "Refresh"}
-                    </Button>
-                </div>
-                <Combobox
-                    options={ensOptions}
-                    value={selectedEnsName}
-                    onValueChange={handleEnsSelect}
-                    placeholder={isWalletReady ? "Select an ENS domain..." : "Connect wallet to load ENS domains"}
-                    disabled={!isWalletReady || ensLoading || ensOptions.length === 0}
-                    loading={ensLoading}
-                    emptyMessage={isWalletReady ? "No ENS domains found for this wallet" : "Connect wallet to load ENS domains"}
-                />
-                {form.formState.errors.ensName ? (
-                    <p className="text-sm text-destructive font-semibold">{form.formState.errors.ensName.message}</p>
-                ) : null}
-                {form.formState.errors.ensOwnerAddress ? (
-                    <p className="text-sm text-destructive font-semibold">{form.formState.errors.ensOwnerAddress.message}</p>
-                ) : null}
-                {ensError ? <p className="text-sm text-destructive font-semibold">{ensError}</p> : null}
-                {!ensLoading && isWalletReady && ensOptions.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                        No ENS domains detected for this wallet. Visit{" "}
-                        <a
-                            href="https://app.ens.domains"
-                            target="_blank"
-                            rel="noreferrer"
-                            className="font-semibold text-orange underline-offset-4 hover:underline">
-                            app.ens.domains
-                        </a>{" "}
-                        to register or manage your names.
-                    </p>
-                ) : null}
-                {!isWalletReady ? <p className="text-sm text-muted-foreground">Connect your Ethereum wallet to load available ENS domains.</p> : null}
-                <input type="hidden" {...form.register("ensOwnerAddress")} />
-            </section>
-
-            <Button type="submit" size="lg" className="w-full shadow-neo-lg" disabled={form.formState.isSubmitting || !canSubmit}>
+            <Button type="submit" size="lg" className="w-full" disabled={form.formState.isSubmitting || !canSubmit}>
                 {form.formState.isSubmitting ? "Creating project..." : "Create project"}
             </Button>
         </form>
