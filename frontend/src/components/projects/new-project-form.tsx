@@ -51,7 +51,7 @@ type Framework = "html" | "nextjs";
 
 const FRAMEWORKS: { value: Framework; label: string; status: "supported" | "coming-soon" }[] = [
     { value: "html", label: "HTML", status: "supported" },
-    { value: "nextjs", label: "Next.js", status: "coming-soon" }
+    { value: "nextjs", label: "Next.js", status: "supported" }
 ];
 
 // Simple framework detection based on repo name and description

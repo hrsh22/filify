@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import fs from 'fs/promises';
+import { createReadStream } from 'fs';
 import archiver from 'archiver';
 import { db } from '../db';
 import { projects, deployments } from '../db/schema';
@@ -10,6 +11,32 @@ import { ensService } from '../services/ens.service';
 import { logger } from '../utils/logger';
 import { getDeploymentBuildDir } from '../utils/paths';
 import { deploymentQueue } from '../services/deployment-queue.service';
+
+async function recoverCarRootCid(carPath: string): Promise<string | null> {
+    try {
+        const buffer = await fs.readFile(carPath);
+        const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+        let carModule: any;
+        try {
+            carModule = await import('@ipld/car/reader');
+        } catch {
+            carModule = await import('@ipld/car');
+        }
+        const CarReader = carModule.CarReader ?? carModule.default;
+        if (!CarReader) {
+            throw new Error('CarReader export not available');
+        }
+        const reader = await CarReader.fromBytes(bytes);
+        const roots = await reader.getRoots();
+        return roots[0]?.toString() ?? null;
+    } catch (error) {
+        logger.error('Failed to recover CAR root CID from artifact', {
+            carPath,
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return null;
+    }
+}
 
 export class DeploymentsController {
     private static readonly RESUMABLE_STATUSES = new Set([
@@ -717,6 +744,124 @@ export class DeploymentsController {
         }
     }
 
+    async downloadCar(req: Request, res: Response) {
+        const { id } = req.params;
+        const userId = (req.user as any).id;
+
+        logger.info('Downloading CAR artifact', { deploymentId: id, userId });
+
+        try {
+            const deployment = await db.query.deployments.findFirst({
+                where: eq(deployments.id, id),
+                with: {
+                    project: {
+                        with: { user: true },
+                    },
+                },
+            });
+
+            if (!deployment || deployment.project.userId !== userId) {
+                return res.status(404).json({
+                    error: 'Not Found',
+                    message: 'Deployment not found',
+                });
+            }
+
+            if (deployment.status !== 'pending_upload' && deployment.status !== 'uploading') {
+                return res.status(400).json({
+                    error: 'InvalidState',
+                    message: 'CAR artifacts are only available while awaiting upload.',
+                });
+            }
+
+            const carPath = deployment.carFilePath;
+            if (!carPath) {
+                return res.status(404).json({
+                    error: 'Not Found',
+                    message: 'CAR artifact is not available for this deployment.',
+                });
+            }
+
+            try {
+                await fs.access(carPath);
+            } catch {
+                return res.status(404).json({
+                    error: 'Not Found',
+                    message: 'CAR artifact not found yet. Please wait for the build to finish.',
+                });
+            }
+
+            if (deployment.status === 'pending_upload') {
+                logger.debug('Updating deployment status to uploading before CAR download', { deploymentId: id });
+                await db
+                    .update(deployments)
+                    .set({ status: 'uploading' })
+                    .where(eq(deployments.id, id));
+            }
+
+            const stats = await fs.stat(carPath);
+            const dispositionName = `${deployment.project.repoName || 'build'}-${id}.car`;
+
+            res.setHeader('Content-Type', 'application/vnd.ipld.car');
+            res.setHeader('Content-Length', stats.size.toString());
+            res.setHeader('Content-Disposition', `attachment; filename="${dispositionName}"`);
+            let rootCid = deployment.carRootCid;
+            if (!rootCid) {
+                rootCid = await recoverCarRootCid(carPath);
+                if (rootCid) {
+                    await db
+                        .update(deployments)
+                        .set({ carRootCid: rootCid, carFilePath: deployment.carFilePath ?? carPath })
+                        .where(eq(deployments.id, id));
+                    logger.info('Recovered CAR root CID for deployment', { deploymentId: id, rootCid });
+                } else {
+                    logger.warn('Unable to determine CAR root CID for deployment', { deploymentId: id });
+                }
+            }
+
+            if (!rootCid) {
+                logger.error('Missing CAR root CID after recovery attempt', { deploymentId: id });
+                return res.status(500).json({
+                    error: 'CarRootCidUnavailable',
+                    message: 'Failed to determine CAR root CID for this deployment.',
+                });
+            }
+
+            res.setHeader('x-root-cid', rootCid);
+            if (deployment.buildArtifactsPath) {
+                res.setHeader('x-build-output', deployment.buildArtifactsPath);
+            }
+
+            const readStream = createReadStream(carPath);
+            readStream.on('error', (error) => {
+                logger.error('Failed while streaming CAR artifact', {
+                    deploymentId: id,
+                    error: error instanceof Error ? error.message : String(error),
+                });
+                if (!res.headersSent) {
+                    res.status(500).json({
+                        error: 'Internal Server Error',
+                        message: 'Failed to stream CAR artifact',
+                    });
+                } else {
+                    res.end();
+                }
+            });
+
+            readStream.pipe(res);
+        } catch (error) {
+            logger.error('Failed to download CAR artifact:', error);
+            if (!res.headersSent) {
+                res.status(500).json({
+                    error: 'Internal Server Error',
+                    message: 'Failed to download CAR artifact',
+                });
+            } else {
+                res.end();
+            }
+        }
+    }
+
     // Run the build process for a deployment
     async runBuildPipeline(
         deploymentId: string,
@@ -756,6 +901,8 @@ export class DeploymentsController {
                     status: 'pending_upload',
                     buildLog: result.logs,
                     buildArtifactsPath: result.outputDir,
+                    carRootCid: result.carRootCid,
+                    carFilePath: result.carFilePath,
                 })
                 .where(eq(deployments.id, deploymentId));
 
@@ -763,6 +910,11 @@ export class DeploymentsController {
             logger.info(`Output directory: ${result.outputDir}`);
             logger.info(`Build directory: ${getDeploymentBuildDir(deploymentId)}`);
             logger.info(`Frontend should now upload from: ${result.outputDir}`);
+            logger.info('CAR artifact prepared', {
+                deploymentId,
+                carRootCid: result.carRootCid,
+                carFilePath: result.carFilePath,
+            });
 
             // Note: Build directory is kept in builds/ folder for artifact download
             // The frontend will handle the Filecoin upload

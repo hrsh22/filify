@@ -43,6 +43,8 @@ export const deployments = sqliteTable('deployments', {
   ensTxHash: text('ens_tx_hash'),
   errorMessage: text('error_message'),
   buildArtifactsPath: text('build_artifacts_path'),
+  carRootCid: text('car_root_cid'),
+  carFilePath: text('car_file_path'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   completedAt: integer('completed_at', { mode: 'timestamp' }),
 });

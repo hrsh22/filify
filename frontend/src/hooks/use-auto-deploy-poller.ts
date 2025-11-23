@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react'
 import { deploymentsService } from '@/services/deployments.service'
-import { downloadBuildFiles } from '@/services/build-artifacts.service'
 import { useFilecoinUpload } from './use-filecoin-upload'
 import { useToast } from '@/context/toast-context'
 import type { Deployment } from '@/types'
@@ -62,12 +61,11 @@ export function useAutoDeployPoller(enabled = true) {
 
       try {
         if (!skipUpload) {
-          stage = 'download'
-          console.log('[AutoDeployPoller] Downloading build artifacts', { deploymentId: deployment.id })
-          const files = await downloadBuildFiles(deployment.id)
           stage = 'upload'
-          console.log('[AutoDeployPoller] Uploading artifacts to Filecoin', { deploymentId: deployment.id })
-          cid = await uploadFile(files, {
+          console.log('[AutoDeployPoller] Uploading backend CAR artifact to Filecoin', {
+            deploymentId: deployment.id,
+          })
+          cid = await uploadFile(deployment.id, {
             deploymentId: deployment.id,
             projectId: deployment.projectId,
           })

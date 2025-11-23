@@ -4,11 +4,14 @@ import fs from 'fs/promises';
 import { encryptionService } from './encryption.service';
 import { logger } from '../utils/logger';
 import { getBuildsRoot, getDeploymentBuildDir } from '../utils/paths';
+import { buildCarFromDirectory } from '../utils/car-builder';
 
 interface BuildResult {
     buildDir: string;
     outputDir: string;
     logs: string;
+    carFilePath: string;
+    carRootCid: string;
 }
 
 interface BuildOptions {
@@ -183,14 +186,28 @@ class BuildService {
 
             logs += `✓ Output directory detected: ${path.basename(detectedOutputDir)}\n`;
 
+            const carFilePath = path.join(buildDir, 'artifact.car');
+            logs += `Creating CAR file...\n`;
+            const carResult = await buildCarFromDirectory(detectedOutputDir, deploymentId, carFilePath);
+            logs += `✓ CAR generated (root CID: ${carResult.rootCid})\n`;
+            logs += `Files included: ${carResult.summary.totalFiles}, directories: ${carResult.summary.totalDirectories}\n`;
+
             logger.info('Build process completed successfully', {
                 deploymentId,
                 buildDir,
                 outputDir: detectedOutputDir,
                 projectType,
+                carFilePath,
+                carRootCid: carResult.rootCid,
             });
 
-            return { buildDir, outputDir: detectedOutputDir, logs };
+            return {
+                buildDir,
+                outputDir: detectedOutputDir,
+                logs,
+                carFilePath,
+                carRootCid: carResult.rootCid,
+            };
         } catch (error) {
             logs += `\n❌ Error: ${(error as Error).message}\n`;
             logger.error(`Build failed for deployment ${deploymentId}:`, error);

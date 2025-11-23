@@ -42,6 +42,7 @@ app.use(
     cors({
         origin: env.FRONTEND_URL,
         credentials: true,
+        exposedHeaders: ['x-root-cid', 'x-build-output'],
     })
 );
 

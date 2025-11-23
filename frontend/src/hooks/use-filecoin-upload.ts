@@ -1,16 +1,15 @@
-import { createCarFromFile, createCarFromFileList } from 'filecoin-pin/core/unixfs'
 import { checkUploadReadiness, executeUpload } from 'filecoin-pin/core/upload'
 import pino from 'pino'
 import { useCallback, useState } from 'react'
 import { storeDataSetId, storeDataSetIdForProvider } from '../lib/local-storage/data-set.ts'
-import type { UploadInput } from '../types/upload/input.ts'
-import { getUploadDisplayName, getUploadTotalSize, isFolder } from '../types/upload/input.ts'
 import type { StepState } from '../types/upload/step.ts'
 import { getDebugParams } from '../utils/debug-params.ts'
 import { formatFileSize } from '../utils/format-file-size.ts'
+import { downloadCarArtifact } from '../services/build-artifacts.service.ts'
 import { useFilecoinPinContext } from './use-filecoin-pin-context.ts'
 import { cacheIpniResult } from './use-ipni-check.ts'
 import { useWaitableRef } from './use-waitable-ref.ts'
+import { CID } from 'multiformats/cid'
 
 interface UploadState {
   isUploading: boolean
@@ -55,7 +54,7 @@ export const INPI_ERROR_MESSAGE =
 
 /**
  * Handles the end-to-end upload workflow with filecoin-pin:
- * - Builds a CAR file in-browser
+ * - Downloads the backend-generated CAR artifact
  * - Checks upload readiness (allowances, balances)
  * - Executes the upload with progress callbacks
  * - Tracks IPNI availability and on-chain confirmation
@@ -64,7 +63,7 @@ export const INPI_ERROR_MESSAGE =
  * actions so they stay dumb and declarative.
  */
 export const useFilecoinUpload = () => {
-  const { synapse, storageContext, providerInfo, checkIfDatasetExists, wallet } = useFilecoinPinContext()
+  const { synapse, storageContext, providerInfo, wallet } = useFilecoinPinContext()
 
   // Use waitable refs to track the latest context values, so the upload callback can access them
   // even if the dataset is initialized after the callback is created
@@ -87,7 +86,7 @@ export const useFilecoinUpload = () => {
   }, [])
 
   const uploadFile = useCallback(
-    async (input: UploadInput, metadata?: Record<string, string>): Promise<string> => {
+    async (deploymentId: string, metadata?: Record<string, string>): Promise<string> => {
       console.groupCollapsed('[FilecoinUpload] Upload started')
       setUploadState({
         isUploading: true,
@@ -95,52 +94,48 @@ export const useFilecoinUpload = () => {
       })
 
       try {
-        // Step 1: Create CAR and upload to Filecoin SP
+        // Step 1: Download CAR artifact prepared by the backend
         updateStepState('creating-car', { status: 'in-progress', progress: 0 })
-        const isFolderUpload = isFolder(input)
-        const totalItems = isFolderUpload ? input.length : 1
-        logger.info(isFolderUpload ? 'Creating CAR from folder' : 'Creating CAR from file')
-        console.info('[FilecoinUpload] Creating CAR', {
-          type: isFolderUpload ? 'folder' : 'file',
-          items: totalItems,
+        console.info('[FilecoinUpload] Downloading CAR from backend', {
+          deploymentId,
           metadata,
         })
 
-        // Create CAR from file or folder with progress tracking
-        const carResult = isFolderUpload
-          ? await createCarFromFileList(input, {
-            onProgress: (bytesProcessed: number, totalBytes: number) => {
-              const progressPercent = Math.round((bytesProcessed / totalBytes) * 100)
-              updateStepState('creating-car', { progress: progressPercent })
-              console.debug(
-                `[FilecoinUpload] CAR progress: ${progressPercent}% (${bytesProcessed}/${totalBytes} bytes)`
-              )
-            },
-          })
-          : await createCarFromFile(input, {
-            onProgress: (bytesProcessed: number, totalBytes: number) => {
-              const progressPercent = Math.round((bytesProcessed / totalBytes) * 100)
-              updateStepState('creating-car', { progress: progressPercent })
-              console.debug(
-                `[FilecoinUpload] CAR progress: ${progressPercent}% (${bytesProcessed}/${totalBytes} bytes)`
-              )
-            },
-          })
+        const artifact = await downloadCarArtifact(deploymentId, (downloaded, totalBytes) => {
+          if (!totalBytes || totalBytes <= 0) {
+            return
+          }
+          const progressPercent = Math.min(100, Math.round((downloaded / totalBytes) * 100))
+          updateStepState('creating-car', { progress: progressPercent })
+        })
 
-        // Store the CID for IPNI checking
-        const rootCid = carResult.rootCid.toString()
+        if (!artifact.rootCid) {
+          throw new Error('Missing CAR root CID from backend artifact')
+        }
+
+        const rootCid = CID.parse(artifact.rootCid)
         setUploadState((prev) => ({
           ...prev,
-          currentCid: rootCid,
+          currentCid: rootCid.toString(),
         }))
 
         updateStepState('creating-car', { status: 'completed', progress: 100 })
-        logger.info({ carResult }, 'CAR created')
-        console.info('[FilecoinUpload] CAR created', {
-          rootCid,
-          carSizeKB: Math.round(carResult.carBytes.length / 1024),
+        logger.info(
+          {
+            deploymentId,
+            rootCid: rootCid.toString(),
+            carSizeKB: Math.round(artifact.bytes.length / 1024),
+            reportedCarSizeKB: Math.round(artifact.carSize / 1024),
+            buildOutput: artifact.buildOutput,
+          },
+          'CAR artifact ready for upload'
+        )
+        console.info('[FilecoinUpload] CAR download completed', {
+          deploymentId,
+          rootCid: rootCid.toString(),
+          carSizeBytes: artifact.bytes.length,
+          buildOutput: artifact.buildOutput,
         })
-        // creating the car is done, but its not uploaded yet.
 
         // Step 2: Check readiness
         updateStepState('checking-readiness', { status: 'in-progress', progress: 0 })
@@ -154,7 +149,7 @@ export const useFilecoinUpload = () => {
         // validate that we can actually upload the car, passing the autoConfigureAllowances flag to true to automatically configure allowances if needed.
         const readinessCheck = await checkUploadReadiness({
           synapse,
-          fileSize: carResult.carBytes.length,
+          fileSize: artifact.bytes.length,
           autoConfigureAllowances: true,
         })
 
@@ -196,16 +191,21 @@ export const useFilecoinUpload = () => {
 
         // Step 3: Upload CAR to Synapse (Filecoin SP)
         logger.info('Uploading CAR to Synapse')
-        const displayName = getUploadDisplayName(input)
-        const totalSize = getUploadTotalSize(input)
-        await executeUpload(synapseService, carResult.carBytes, carResult.rootCid, {
+        const totalSize = artifact.bytes.length
+        const labelPrefix =
+          metadata?.deploymentId?.slice(0, 8) ??
+          artifact.buildOutput ??
+          `deployment-${deploymentId.slice(0, 6)}`
+        const projectSuffix = metadata?.projectId ? `-project-${metadata.projectId.slice(0, 6)}` : ''
+        const labelFromMetadata = `${labelPrefix}${projectSuffix}`
+        const pieceMetadata = {
+          label: labelFromMetadata,
+        }
+
+        await executeUpload(synapseService, artifact.bytes, rootCid, {
           logger,
           contextId: `upload-${Date.now()}`,
-          metadata: {
-            ...(metadata ?? {}),
-            label: displayName,
-            fileSize: formatFileSize(totalSize),
-          },
+          metadata: pieceMetadata,
           onProgress: (event) => {
             switch (event.type) {
               case 'onUploadComplete':
@@ -264,7 +264,7 @@ export const useFilecoinUpload = () => {
                 console.warn('[FilecoinUpload] IPNI check failed after max attempts:', event.data.error.message)
                 console.info('[FilecoinUpload] IPNI announcement failed')
                 // Cache the failed result
-                cacheIpniResult(rootCid, 'failed')
+                cacheIpniResult(rootCid.toString(), 'failed')
                 updateStepState('announcing-cids', {
                   status: 'error',
                   progress: 0,
@@ -276,7 +276,7 @@ export const useFilecoinUpload = () => {
                 console.debug('[FilecoinUpload] IPNI check succeeded, marking announcing-cids as completed')
                 console.info('[FilecoinUpload] IPNI announcement complete')
                 // Cache the success result
-                cacheIpniResult(rootCid, 'success')
+                cacheIpniResult(rootCid.toString(), 'success')
                 updateStepState('announcing-cids', { status: 'completed', progress: 100 })
                 break
               }
@@ -289,7 +289,7 @@ export const useFilecoinUpload = () => {
         console.info('[FilecoinUpload] Upload pipeline finished', { rootCid })
 
         // Return the actual CID from the CAR result
-        return rootCid
+        return rootCid.toString()
       } catch (error) {
         console.error('[FilecoinUpload] Upload failed with error:', error)
         console.info('[FilecoinUpload] Upload failed', error)
@@ -306,7 +306,7 @@ export const useFilecoinUpload = () => {
         }))
       }
     },
-    [updateStepState, synapse, checkIfDatasetExists]
+    [updateStepState, synapse, storageContextRef, providerInfoRef, synapseRef, wallet]
   )
 
   const resetUpload = useCallback(() => {

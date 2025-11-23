@@ -41,6 +41,7 @@ router.get('/', isAuthenticated, (req, res) => deploymentsController.list(req, r
 router.get('/:id', isAuthenticated, (req, res) => deploymentsController.getStatus(req, res));
 router.get('/:id/artifacts', isAuthenticated, (req, res) => deploymentsController.downloadArtifacts(req, res));
 router.get('/:id/artifact', isAuthenticated, (req, res) => deploymentsController.downloadArtifacts(req, res)); // legacy path
+router.get('/:id/car', isAuthenticated, (req, res) => deploymentsController.downloadCar(req, res));
 router.post('/:id/cancel', isAuthenticated, (req, res) => deploymentsController.cancel(req, res));
 
 export default router;

@@ -30,7 +30,7 @@ Filify is a decentralized deployment platform that enables developers to deploy 
 4. Manual deployments can be triggered from the dashboard/project page
 5. Auto-deployments fire when GitHub sends a push webhook; the backend enqueues a build job per project
 6. Backend clones the repository, builds it, and stores build artifacts for up to 24h
-7. The frontend auto-deploy poller downloads pending artifacts, uploads them to Filecoin via `filecoin-pin`, and receives an IPFS CID
+7. The backend now emits a ready-to-upload CAR artifact per deployment, and the frontend auto-deploy poller downloads that CAR stream and uploads it to Filecoin via `filecoin-pin`, receiving the final IPFS CID
 8. The backend prepares the ENS resolver transaction while the connected wallet signs & broadcasts it to Ethereum mainnet
 9. Once the transaction confirms, the backend verifies the resolver contenthash so the ENS domain resolves to the new IPFS CID
 
@@ -126,7 +126,7 @@ Filify is a decentralized deployment platform that enables developers to deploy 
 
 - `projects` now store `auto_deploy_branch`, `webhook_enabled`, and encrypted `webhook_secret` metadata so each project can manage its own GitHub webhook configuration.
 - `projects` persist the ENS owner address (lowercased) instead of private keys so resolver transactions are always signed by the connected wallet.
-- `deployments` track `triggered_by` (`manual`/`webhook`), `commit_sha`, `commit_message`, and a `build_artifacts_path` pointer so the frontend can download backend-built files.
+- `deployments` track `triggered_by` (`manual`/`webhook`), `commit_sha`, `commit_message`, a `build_artifacts_path` pointer, plus the backend-generated `car_root_cid` and `car_file_path` so the frontend can fetch the CAR artifact directly.
 
 ---
 
@@ -148,7 +148,7 @@ Filify is a decentralized deployment platform that enables developers to deploy 
 - **Build Configuration**: Custom build commands and output directories
 - **ENS Configuration**: Domain name (selected from wallet-owned ENS names) and the corresponding owner address
 
-**Current State**: Full CRUD operations for projects. When users create a project, they select a GitHub repository/branch, configure ENS + build settings, and the backend automatically registers the GitHub webhook for auto-deploy using the selected branch. The ENS domain combobox is populated from the connected wallet via the ENS subgraph, and the backend stores only the owner address so signatures always happen client-side. Project settings allow switching the auto-deploy branch or disabling the webhook entirely. Project history shows all deployments with trigger provenance and commit metadata.
+**Current State**: Full CRUD operations for projects. When users create a project, they select a GitHub repository/branch, configure ENS + build settings, and the backend automatically registers the GitHub webhook for auto-deploy using the selected branch. The new project form lets users choose either HTML or Next.js and enforces build command/output directory requirements for Next.js. The ENS domain combobox is populated from the connected wallet via the ENS subgraph, and the backend stores only the owner address so signatures always happen client-side. Project settings allow switching the auto-deploy branch or disabling the webhook entirely. Project history shows all deployments with trigger provenance and commit metadata.
 
 ### Build Process
 
@@ -157,7 +157,7 @@ Filify is a decentralized deployment platform that enables developers to deploy 
 - **Output Detection**: Auto-detects output directories (out, dist, build, .next)
 - **Logs**: Real-time build logs stored in database
 
-**Current State**: Build service automatically detects Next.js, Node.js, and static projects. For Next.js, it creates a static export config if missing. Builds run in isolated directories under the repo-level `builds/` folder (auto-cleaned after 24h), and only one build per project runs at a time via an in-memory queue. Build logs are captured, output folders are recorded for artifact downloads, and failed runs can still resume from cached workspaces.
+**Current State**: Build service automatically detects Next.js, Node.js, and static projects. For Next.js, it creates a static export config if missing. Builds run in isolated directories under the repo-level `builds/` folder (auto-cleaned after 24h), and only one build per project runs at a time via an in-memory queue. Each successful build now summarizes the output directory tree (file/folder counts plus sample paths) before emitting an `artifact.car` file alongside the workspace, so the frontend never has to repackage artifacts. Build logs are captured, output folders and CAR metadata are recorded for artifact downloads, and failed runs can still resume from cached workspaces.
 
 ### Filecoin Integration
 
@@ -166,7 +166,7 @@ Filify is a decentralized deployment platform that enables developers to deploy 
 - **Upload Flow**: CAR creation → Storage Provider upload → IPNI indexing → Onchain commitment
 - **Progress Tracking**: Real-time upload progress
 
-**Current State**: Uses filecoin-pin library for uploads. Currently configured for Filecoin Calibration testnet. Upload process includes CAR creation, storage provider selection, IPNI indexing, and onchain commitment. Progress tracking shows real-time status. Uses session key authentication (shared wallet approach for demo).
+**Current State**: Uses filecoin-pin library for uploads. Currently configured for Filecoin Calibration testnet. The backend now handles all CAR creation (including directory summaries) and exposes the binary via `GET /api/deployments/:id/car` (with `x-root-cid`/`x-build-output` headers exposed via CORS) so the frontend simply streams the CAR and forwards it to the storage provider—no more zip extraction or client-side CAR building. Upload process includes CAR retrieval, storage provider selection, IPNI indexing, and onchain commitment. The auto-deploy poller always uploads the full backend-generated CAR (covering Next.js `out/` or `.next` exports) so every nested file/folder is preserved, and piece metadata is limited to a single label field to stay under the storage provider’s five-key cap. Progress tracking shows real-time status and uses session key authentication (shared wallet approach for demo).
 
 ### ENS Updates
 
@@ -218,6 +218,7 @@ pending_build → cloning → building → pending_upload → uploading → awai
 - `GET /api/deployments` - List deployments with optional status/limit filters (used by auto-deploy poller)
 - `GET /api/deployments/:id` - Get deployment status
 - `GET /api/deployments/:id/artifacts` - Download backend build artifacts as a zip
+- `GET /api/deployments/:id/car` - Stream the backend-generated CAR artifact (used by the auto-deploy uploader)
 - `POST /api/deployments/:id/upload/fail` - Mark upload as failed (used when Filecoin upload errors)
 - `POST /api/deployments/:id/ens/prepare` - Normalize CID + return resolver calldata for the wallet to sign
 - `POST /api/deployments/:id/ens/confirm` - Record a signed transaction hash and verify the resolver contenthash
@@ -328,7 +329,7 @@ Failed deployments can be resumed from previous builds:
 
 - GitHub push webhooks are registered per-project with encrypted secrets (auto-rotated if a signature mismatch is detected) and rate-limited intake.
 - Each webhook event creates a `pending_build` deployment and is enqueued so only one build runs per project at a time.
-- After the backend marks a deployment `pending_upload`, the frontend auto-deploy poller downloads artifacts, uploads them to Filecoin, and then requests an ENS payload from the backend.
+- After the backend marks a deployment `pending_upload`, it also stores a summarized build directory and emits an `artifact.car`. The frontend auto-deploy poller streams that CAR via `/api/deployments/:id/car`, feeds it directly into `filecoin-pin`, and then requests an ENS payload from the backend once the upload finishes.
 - The poller (or the deployment detail page) prompts the connected wallet to sign the resolver transaction (debounced so the wallet only sees one prompt per deployment), submits the tx hash back to the backend, and the backend verifies the resolver before marking the deployment `success`.
 - Upload failures are reported back via `POST /api/deployments/:id/upload/fail` so the UI shows a failed deployment with logs.
 
@@ -381,6 +382,7 @@ Failed deployments can be resumed from previous builds:
 - `passport-github2` ^0.1.12
 - `@octokit/rest` ^20.0.2
 - `zod` ^3.22.4
+- `@ipld/car`, `@ipld/dag-pb`, `ipfs-unixfs-importer`, `blockstore-core`, and `interface-blockstore` for backend CAR generation
 
 **Status**: Dependencies are stable. Frontend uses React 19, filecoin-pin 0.12.0, React Router v7. Backend uses Express 4.18.2, Drizzle ORM 0.29.1, ethers.js v6.9.0.
 
