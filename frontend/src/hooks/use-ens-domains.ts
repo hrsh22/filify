@@ -12,7 +12,7 @@ interface EnsDomainQueryResult {
         id: string
         wrappedDomains: Array<{
             domain: {
-                id: string
+                id?: string | null
                 name: string
                 labelName?: string | null
                 labelhash?: string | null
@@ -21,6 +21,25 @@ interface EnsDomainQueryResult {
                 createdAt?: string | null
             }
         }>
+    }>
+    domains: Array<{
+        id?: string | null
+        name: string
+        labelName?: string | null
+        expiryDate?: string | null
+        createdAt?: string | null
+    }>
+    registrations: Array<{
+        id: string
+        expiryDate?: string | null
+        registrationDate?: string | null
+        domain: {
+            id?: string | null
+            name: string
+            labelName?: string | null
+            expiryDate?: string | null
+            createdAt?: string | null
+        }
     }>
 }
 
@@ -33,14 +52,33 @@ const ENS_DOMAINS_QUERY = /* GraphQL */ `
       id
       wrappedDomains {
         domain {
+          id
           name
           labelhash
           labelName
           isMigrated
-          id
           expiryDate
           createdAt
         }
+      }
+    }
+    domains(where: { owner: $owner }) {
+      id
+      name
+      labelName
+      expiryDate
+      createdAt
+    }
+    registrations(where: { registrant: $owner }) {
+      id
+      expiryDate
+      registrationDate
+      domain {
+        id
+        name
+        labelName
+        expiryDate
+        createdAt
       }
     }
   }
@@ -88,42 +126,91 @@ async function fetchEnsDomains(ownerAddress: string): Promise<EnsDomain[]> {
         throw new Error(json.errors[0]?.message ?? 'ENS subgraph returned an error')
     }
 
-    // Extract domains from wrappedDomains
     const accounts = json.data?.accounts ?? []
-    const allDomains: Array<{
+    const ownedDomains = json.data?.domains ?? []
+    const registrations = json.data?.registrations ?? []
+
+    type RawDomain = {
         id: string
         name: string
         labelName?: string | null
         expiryDate?: string | null
-    }> = []
+    }
+
+    const collectedDomains: RawDomain[] = []
+
+    const collectDomain = (
+        domain: {
+            id?: string | null
+            name?: string | null
+            labelName?: string | null
+            expiryDate?: string | null
+        },
+        fallbackExpiry?: string | null
+    ) => {
+        if (!domain?.name?.endsWith('.eth')) {
+            return
+        }
+
+        const id = domain.id ?? domain.name
+        if (!id || !domain.name) {
+            return
+        }
+
+        collectedDomains.push({
+            id,
+            name: domain.name,
+            labelName: domain.labelName,
+            expiryDate: domain.expiryDate ?? fallbackExpiry ?? null,
+        })
+    }
 
     for (const account of accounts) {
         for (const wrappedDomain of account.wrappedDomains) {
-            const domain = wrappedDomain.domain
-            if (domain.name?.endsWith('.eth')) {
-                allDomains.push({
-                    id: domain.id,
-                    name: domain.name,
-                    labelName: domain.labelName,
-                    expiryDate: domain.expiryDate,
-                })
-            }
+            collectDomain(wrappedDomain.domain)
         }
+    }
+
+    for (const domain of ownedDomains) {
+        collectDomain(domain)
+    }
+
+    for (const registration of registrations) {
+        collectDomain(registration.domain, registration.expiryDate)
     }
 
     console.log('[fetchEnsDomains] Subgraph response:', {
         accountsCount: accounts.length,
-        totalDomainsCount: allDomains.length,
+        wrappedDomainsCount: accounts.reduce((total, account) => total + account.wrappedDomains.length, 0),
+        ownedDomainsCount: ownedDomains.length,
+        registrationsCount: registrations.length,
+        totalCollected: collectedDomains.length,
         address: normalizedAddress,
-        rawData: json.data,
     })
 
-    // Deduplicate by domain ID
-    const domainMap = new Map<string, (typeof allDomains)[0]>()
+    const domainMap = new Map<string, RawDomain>()
 
-    for (const domain of allDomains) {
-        if (domain.id && domain.name?.endsWith('.eth')) {
+    for (const domain of collectedDomains) {
+        if (!domain.id || !domain.name) {
+            continue
+        }
+
+        const existing = domainMap.get(domain.id)
+
+        if (!existing) {
             domainMap.set(domain.id, domain)
+            continue
+        }
+
+        const hasBetterExpiry = !existing.expiryDate && !!domain.expiryDate
+        const hasBetterLabel = !existing.labelName && !!domain.labelName
+
+        if (hasBetterExpiry || hasBetterLabel) {
+            domainMap.set(domain.id, {
+                ...existing,
+                expiryDate: hasBetterExpiry ? domain.expiryDate : existing.expiryDate,
+                labelName: hasBetterLabel ? domain.labelName : existing.labelName,
+            })
         }
     }
 
