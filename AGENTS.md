@@ -125,6 +125,7 @@ Filify is a decentralized deployment platform that enables developers to deploy 
 
 - `projects` now store `auto_deploy_branch`, `webhook_enabled`, and encrypted `webhook_secret` metadata so each project can manage its own GitHub webhook configuration.
 - `projects` persist the ENS owner address (lowercased) instead of private keys so resolver transactions are always signed by the connected wallet.
+- `projects` optionally persist a `frontend_dir` value that points to the subdirectory containing the deployable frontend so the build pipeline can target monorepo layouts.
 - `deployments` track `triggered_by` (`manual`/`webhook`), `commit_sha`, `commit_message`, a `build_artifacts_path` pointer, plus the backend-generated `car_root_cid` and `car_file_path` so the frontend can fetch the CAR artifact directly.
 
 ---
@@ -147,7 +148,7 @@ Filify is a decentralized deployment platform that enables developers to deploy 
 - **Build Configuration**: Custom build commands and output directories
 - **ENS Configuration**: Domain name (selected from wallet-owned ENS names) and the corresponding owner address
 
-**Current State**: Full CRUD operations for projects. When users create a project, they select a GitHub repository/branch, configure ENS + build settings, and the backend automatically registers the GitHub webhook for auto-deploy using the selected branch. The new project form lets users choose HTML, Vite, or Next.js (auto-filling build defaults where needed) and surfaces a warning whenever the selected repository doesn’t resemble one of those supported frameworks. The ENS domain combobox is populated from the connected wallet via the ENS subgraph, and the backend stores only the owner address so signatures always happen client-side. Project settings allow switching the auto-deploy branch or disabling the webhook entirely. Project history shows all deployments with trigger provenance and commit metadata.
+**Current State**: Full CRUD operations for projects. When users create a project, they select a GitHub repository/branch, configure ENS + build settings, and the backend automatically registers the GitHub webhook for auto-deploy using the selected branch. The new project form lets users choose HTML, Vite, or Next.js (auto-filling build defaults where needed) and surfaces a warning whenever the selected repository doesn’t resemble one of those supported frameworks. The ENS domain combobox is populated from the connected wallet via the ENS subgraph, and the backend stores only the owner address so signatures always happen client-side. Project settings allow switching the auto-deploy branch or disabling the webhook entirely. Project history shows all deployments with trigger provenance and commit metadata. Projects can optionally provide a `frontendDir` when their frontend lives in a subdirectory; the build service runs inside that folder when set, otherwise it builds from the repository root.
 
 ### Build Process
 

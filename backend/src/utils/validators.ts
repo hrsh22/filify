@@ -11,6 +11,7 @@ export const createProjectSchema = z.object({
         ethereumRpcUrl: z.string().url(),
         buildCommand: z.string().optional(),
         outputDir: z.string().optional(),
+        frontendDir: z.string().min(1).optional(),
     }),
 });
 
@@ -24,6 +25,7 @@ export const updateProjectSchema = z.object({
         ethereumRpcUrl: z.string().url().optional(),
         buildCommand: z.string().optional(),
         outputDir: z.string().optional(),
+        frontendDir: z.string().min(1).optional(),
     }),
 });
 
