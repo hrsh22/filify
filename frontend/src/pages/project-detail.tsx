@@ -321,7 +321,7 @@ export function ProjectDetailPage() {
                                         ) : null}
                                         {deployment.ipfsCid ? (
                                             <a
-                                                href={`https://ipfs.io/ipfs/${deployment.ipfsCid}`}
+                                                href={`https://${deployment.ipfsCid}.ipfs.dweb.link`}
                                                 target="_blank"
                                                 rel="noreferrer"
                                                 className="block text-sm text-cyan underline-offset-4 hover:underline font-semibold">

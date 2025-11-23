@@ -91,7 +91,7 @@ export function DeploymentDetailPage() {
     const isAwaitingSignature = deployment.status === "awaiting_signature";
     const isAwaitingConfirmation = deployment.status === "awaiting_confirmation";
     const canSignEns = isAwaitingSignature && Boolean(walletClient && address);
-    const ipfsUrl = deployment.ipfsCid ? `https://ipfs.io/ipfs/${deployment.ipfsCid}` : null;
+    const ipfsUrl = deployment.ipfsCid ? `https://${deployment.ipfsCid}.ipfs.dweb.link` : null;
     const ensUrl = project?.ensName ? `https://${project.ensName}.limo` : null;
     const etherscanUrl = deployment.ensTxHash ? `https://etherscan.io/tx/${deployment.ensTxHash}` : null;
     const isCancellable = CANCELLABLE_STATUSES.has(deployment.status);

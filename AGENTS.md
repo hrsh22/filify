@@ -148,7 +148,7 @@ Filify is a decentralized deployment platform that enables developers to deploy 
 - **Build Configuration**: Custom build commands and output directories
 - **ENS Configuration**: Domain name (selected from wallet-owned ENS names) and the corresponding owner address
 
-**Current State**: Full CRUD operations for projects. When users create a project, they select a GitHub repository/branch, configure ENS + build settings, and the backend automatically registers the GitHub webhook for auto-deploy using the selected branch. The new project form lets users choose either HTML or Next.js and enforces build command/output directory requirements for Next.js. The ENS domain combobox is populated from the connected wallet via the ENS subgraph, and the backend stores only the owner address so signatures always happen client-side. Project settings allow switching the auto-deploy branch or disabling the webhook entirely. Project history shows all deployments with trigger provenance and commit metadata.
+**Current State**: Full CRUD operations for projects. When users create a project, they select a GitHub repository/branch, configure ENS + build settings, and the backend automatically registers the GitHub webhook for auto-deploy using the selected branch. The new project form lets users choose HTML, Vite, or Next.js (auto-filling build defaults where needed) and surfaces a warning whenever the selected repository doesn’t resemble one of those supported frameworks. The ENS domain combobox is populated from the connected wallet via the ENS subgraph, and the backend stores only the owner address so signatures always happen client-side. Project settings allow switching the auto-deploy branch or disabling the webhook entirely. Project history shows all deployments with trigger provenance and commit metadata.
 
 ### Build Process
 
@@ -157,7 +157,7 @@ Filify is a decentralized deployment platform that enables developers to deploy 
 - **Output Detection**: Auto-detects output directories (out, dist, build, .next)
 - **Logs**: Real-time build logs stored in database
 
-**Current State**: Build service automatically detects Next.js, Node.js, and static projects. For Next.js, it creates a static export config if missing. Builds run in isolated directories under the repo-level `builds/` folder (auto-cleaned after 24h), and only one build per project runs at a time via an in-memory queue. Each successful build now summarizes the output directory tree (file/folder counts plus sample paths) before emitting an `artifact.car` file alongside the workspace, so the frontend never has to repackage artifacts. Build logs are captured, output folders and CAR metadata are recorded for artifact downloads, and failed runs can still resume from cached workspaces.
+**Current State**: Build service automatically detects Next.js, Vite (via the standard Node.js flow/output detection), and other Node/static projects. For Next.js, it creates a static export config if missing. Builds run in isolated directories under the repo-level `builds/` folder (auto-cleaned after 24h), and only one build per project runs at a time via an in-memory queue. Each successful build now summarizes the output directory tree (file/folder counts plus sample paths) before emitting an `artifact.car` file alongside the workspace, so the frontend never has to repackage artifacts. Build logs are captured, output folders and CAR metadata are recorded for artifact downloads, and failed runs can still resume from cached workspaces.
 
 ### Filecoin Integration
 

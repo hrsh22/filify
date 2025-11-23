@@ -23,7 +23,7 @@ const schema = z
         repoName: z.string().min(1, "Repository is required"),
         repoUrl: z.string().url(),
         repoBranch: z.string().min(1, "Branch is required"),
-        framework: z.enum(["html", "nextjs"], { required_error: "Framework is required" }),
+        framework: z.enum(["html", "nextjs", "vite"], { required_error: "Framework is required" }),
         ensName: z.string().min(1, "ENS domain is required"),
         ensOwnerAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Wallet address is required"),
         buildCommand: z.string().optional(),
@@ -47,29 +47,13 @@ type FormValues = z.infer<typeof schema>;
 
 const ETH_MAINNET_RPC = `https://eth-mainnet.g.alchemy.com/v2/0INEHyBWJeRtdwKOIIkaOW4Jnh92W6gB`;
 
-type Framework = "html" | "nextjs";
+type Framework = "html" | "nextjs" | "vite";
 
 const FRAMEWORKS: { value: Framework; label: string; status: "supported" | "coming-soon" }[] = [
     { value: "html", label: "HTML", status: "supported" },
-    { value: "nextjs", label: "Next.js", status: "supported" }
+    { value: "nextjs", label: "Next.js", status: "supported" },
+    { value: "vite", label: "Vite", status: "supported" }
 ];
-
-// Simple framework detection based on repo name and description
-function detectFramework(repo: RepositorySummary | null): Framework | null {
-    if (!repo) return null;
-
-    const name = repo.name.toLowerCase();
-    const fullName = repo.fullName.toLowerCase();
-    const description = (repo.description || "").toLowerCase();
-    const searchText = `${name} ${fullName} ${description}`;
-
-    if (searchText.includes("next") || searchText.includes("nextjs") || searchText.includes("next.js")) {
-        return "nextjs";
-    }
-
-    // Default to HTML if no framework detected
-    return "html";
-}
 
 function formatAddress(address: string) {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -85,10 +69,10 @@ export function NewProjectForm() {
     const { branches, loading: branchesLoading } = useBranches(selectedRepo?.fullName ?? null);
     const walletAddress = isConnected && address ? address : null;
     const { domains: ensDomains, loading: ensLoading, error: ensError, refresh: refreshEns } = useEnsDomains(walletAddress);
-    
+
     // Fetch ENS name for the connected wallet address
     const { data: walletEnsName } = useQuery({
-        queryKey: ['walletEnsName', walletAddress],
+        queryKey: ["walletEnsName", walletAddress],
         queryFn: async () => {
             if (!walletAddress || !publicClient) return null;
             try {
@@ -98,7 +82,7 @@ export function NewProjectForm() {
             }
         },
         enabled: isConnected && !!walletAddress && !!publicClient,
-        staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+        staleTime: 5 * 60 * 1000 // Cache for 5 minutes
     });
 
     // Debug logging
@@ -159,7 +143,7 @@ export function NewProjectForm() {
         form.setValue("ensName", value, { shouldValidate: true, shouldDirty: true });
     };
 
-    // Auto-detect framework and set default branch when repo is selected
+    // Set default branch when repo is selected
     useEffect(() => {
         if (selectedRepo) {
             form.setValue("repoName", selectedRepo.fullName);
@@ -172,14 +156,8 @@ export function NewProjectForm() {
             if (selectedRepo.defaultBranch) {
                 form.setValue("repoBranch", selectedRepo.defaultBranch);
             }
-
-            // Auto-detect framework and suggest it (user can override)
-            const detectedFramework = detectFramework(selectedRepo);
-            if (detectedFramework) {
-                form.setValue("framework", detectedFramework);
-            }
         }
-    }, [selectedRepo, form, repositories]);
+    }, [selectedRepo, form]);
 
     // Update branch when branches are loaded and default branch is available
     useEffect(() => {
@@ -192,7 +170,6 @@ export function NewProjectForm() {
     }, [branches, selectedRepo, form]);
 
     const selectedFramework = form.watch("framework");
-    const detectedFramework = detectFramework(selectedRepo);
     const selectedEnsName = form.watch("ensName");
     const isWalletReady = Boolean(walletAddress);
     const walletDisplayName = walletEnsName || (walletAddress ? formatAddress(walletAddress) : null);
@@ -219,15 +196,14 @@ export function NewProjectForm() {
         }
     }, [ensOptions, form]);
 
-    // Set default build config when Next.js is selected
+    // Set default build config based on framework selection
     useEffect(() => {
         if (selectedFramework === "nextjs") {
-            if (!form.getValues("buildCommand")) {
-                form.setValue("buildCommand", "npm run build");
-            }
-            if (!form.getValues("outputDir")) {
-                form.setValue("outputDir", "out");
-            }
+            form.setValue("buildCommand", "npm run build");
+            form.setValue("outputDir", "out");
+        } else if (selectedFramework === "vite") {
+            form.setValue("buildCommand", "npm run build");
+            form.setValue("outputDir", "dist");
         } else if (selectedFramework === "html") {
             // Clear build config for HTML
             form.setValue("buildCommand", undefined);
@@ -297,9 +273,6 @@ export function NewProjectForm() {
                                         </Badge>
                                     ) : null}
                                 </div>
-                                {detectedFramework === framework.value && selectedRepo && (
-                                    <p className="text-xs text-cyan mt-1">Detected from repository</p>
-                                )}
                             </button>
                         );
                     })}
@@ -309,17 +282,40 @@ export function NewProjectForm() {
                 )}
             </section>
 
+            {/* Build Configuration */}
+            {(selectedFramework === "nextjs" || selectedFramework === "vite") && (
+                <section className="space-y-5 rounded-xl bg-card border border-border p-7 shadow-neo">
+                    <div className="space-y-2">
+                        <p className="text-sm font-bold uppercase tracking-wide text-primary">Build configuration</p>
+                        <p className="text-sm font-medium text-muted-foreground leading-relaxed">
+                            {selectedFramework === "nextjs"
+                                ? "Customize how Filify builds and exports your Next.js project."
+                                : "Customize how Filify builds your Vite project."}
+                        </p>
+                    </div>
+                    <div className="grid gap-5 md:grid-cols-2">
+                        <div className="space-y-3">
+                            <Label htmlFor="buildCommand">Build command</Label>
+                            <Input id="buildCommand" placeholder="npm run build" {...form.register("buildCommand")} />
+                            {form.formState.errors.buildCommand ? (
+                                <p className="text-sm text-destructive font-semibold">{form.formState.errors.buildCommand.message}</p>
+                            ) : null}
+                        </div>
+                        <div className="space-y-3">
+                            <Label htmlFor="outputDir">Output directory</Label>
+                            <Input id="outputDir" placeholder={selectedFramework === "nextjs" ? "out" : "dist"} {...form.register("outputDir")} />
+                            {form.formState.errors.outputDir ? (
+                                <p className="text-sm text-destructive font-semibold">{form.formState.errors.outputDir.message}</p>
+                            ) : null}
+                        </div>
+                    </div>
+                </section>
+            )}
+
             {/* Repository Selection */}
             <section className="space-y-5 rounded-xl bg-card border border-border p-7 shadow-neo">
                 <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                        <Label>GitHub repository</Label>
-                        {selectedRepo && detectedFramework && (
-                            <Badge variant="accent" className="text-xs">
-                                {detectedFramework === "nextjs" ? "Next.js" : "HTML"} detected
-                            </Badge>
-                        )}
-                    </div>
+                    <Label>GitHub repository</Label>
                     <Combobox
                         options={repoOptions}
                         value={selectedRepo?.id.toString()}
@@ -412,34 +408,6 @@ export function NewProjectForm() {
                 {!isWalletReady ? <p className="text-sm text-muted-foreground">Connect your Ethereum wallet to load available ENS domains.</p> : null}
                 <input type="hidden" {...form.register("ensOwnerAddress")} />
             </section>
-
-            {/* Build Configuration - Only for Next.js */}
-            {selectedFramework === "nextjs" && (
-                <section className="space-y-5 rounded-xl bg-card border border-border p-7 shadow-neo">
-                    <div className="space-y-2">
-                        <p className="text-sm font-bold uppercase tracking-wide text-primary">Build configuration</p>
-                        <p className="text-sm font-medium text-muted-foreground leading-relaxed">
-                            Customize how Filify builds and exports your Next.js project.
-                        </p>
-                    </div>
-                    <div className="grid gap-5 md:grid-cols-2">
-                        <div className="space-y-3">
-                            <Label htmlFor="buildCommand">Build command</Label>
-                            <Input id="buildCommand" placeholder="npm run build" defaultValue="npm run build" {...form.register("buildCommand")} />
-                            {form.formState.errors.buildCommand ? (
-                                <p className="text-sm text-destructive font-semibold">{form.formState.errors.buildCommand.message}</p>
-                            ) : null}
-                        </div>
-                        <div className="space-y-3">
-                            <Label htmlFor="outputDir">Output directory</Label>
-                            <Input id="outputDir" placeholder="out" defaultValue="out" {...form.register("outputDir")} />
-                            {form.formState.errors.outputDir ? (
-                                <p className="text-sm text-destructive font-semibold">{form.formState.errors.outputDir.message}</p>
-                            ) : null}
-                        </div>
-                    </div>
-                </section>
-            )}
 
             <Button type="submit" size="lg" className="w-full shadow-neo-lg" disabled={form.formState.isSubmitting || !canSubmit}>
                 {form.formState.isSubmitting ? "Creating project..." : "Create project"}
