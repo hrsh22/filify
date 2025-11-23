@@ -12,6 +12,7 @@ import { logger } from '../utils/logger';
 import { getDeploymentBuildDir } from '../utils/paths';
 import { deploymentQueue } from '../services/deployment-queue.service';
 import { env } from '../config/env';
+import { dynamicImport } from '../utils/dynamic-import';
 
 async function recoverCarRootCid(carPath: string): Promise<string | null> {
     try {
@@ -19,9 +20,9 @@ async function recoverCarRootCid(carPath: string): Promise<string | null> {
         const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
         let carModule: any;
         try {
-            carModule = await import('@ipld/car/reader');
+            carModule = await dynamicImport('@ipld/car/reader');
         } catch {
-            carModule = await import('@ipld/car');
+            carModule = await dynamicImport('@ipld/car');
         }
         const CarReader = carModule.CarReader ?? carModule.default;
         if (!CarReader) {

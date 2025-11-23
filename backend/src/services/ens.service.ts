@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 import contentHash from 'content-hash';
 import { logger } from '../utils/logger';
+import { dynamicImport } from '../utils/dynamic-import';
 
 type CidModule = typeof import('multiformats/cid');
 type Base58Module = typeof import('multiformats/bases/base58');
@@ -10,14 +11,14 @@ let base58ModulePromise: Promise<Base58Module> | null = null;
 
 async function loadCidModule(): Promise<CidModule> {
     if (!cidModulePromise) {
-        cidModulePromise = import('multiformats/cid');
+        cidModulePromise = dynamicImport('multiformats/cid');
     }
     return cidModulePromise;
 }
 
 async function loadBase58Module(): Promise<Base58Module> {
     if (!base58ModulePromise) {
-        base58ModulePromise = import('multiformats/bases/base58');
+        base58ModulePromise = dynamicImport('multiformats/bases/base58');
     }
     return base58ModulePromise;
 }

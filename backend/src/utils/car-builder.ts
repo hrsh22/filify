@@ -4,6 +4,7 @@ import { createReadStream, createWriteStream } from 'fs';
 import { once } from 'events';
 import type { CID } from 'multiformats/cid';
 import { logger } from './logger';
+import { dynamicImport } from './dynamic-import';
 
 const IGNORED_ENTRIES = new Set([
   '.git',
@@ -13,10 +14,6 @@ const IGNORED_ENTRIES = new Set([
   'node_modules',
   '__MACOSX',
 ]);
-
-const dynamicImport = new Function('specifier', 'return import(specifier);') as (
-  specifier: string
-) => Promise<any>;
 
 interface DirectorySummary {
   totalFiles: number;
@@ -81,7 +78,7 @@ class MemoryBlockstore {
   }
 
   async *entries() {
-    const { CID } = await import('multiformats/cid');
+    const { CID } = await dynamicImport('multiformats/cid');
     for (const [key, bytes] of this.blocks.entries()) {
       yield { cid: CID.parse(key), bytes };
     }
