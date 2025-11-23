@@ -57,6 +57,7 @@ This document lists all required and optional environment variables for the back
 ### Encryption
 
 - **`ENCRYPTION_KEY`** (required)
+
     - AES-256-GCM encryption key (must be exactly 64 hex characters = 32 bytes)
     - Generate with: `openssl rand -hex 32`
     - Example: `ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef`

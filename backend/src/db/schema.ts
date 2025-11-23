@@ -25,6 +25,7 @@ export const projects = sqliteTable('projects', {
   ethereumRpcUrl: text('ethereum_rpc_url').notNull(),
   buildCommand: text('build_command'),
   outputDir: text('output_dir'),
+  frontendDir: text('frontend_dir'),
   webhookEnabled: integer('webhook_enabled', { mode: 'boolean' }).notNull().default(false),
   webhookSecret: text('webhook_secret'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),

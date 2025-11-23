@@ -14,12 +14,12 @@ if (isTurso) {
   const { createClient } = require('@libsql/client');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { drizzle } = require('drizzle-orm/libsql');
-  
+
   const client = createClient({
     url: env.DATABASE_URL,
     authToken: env.DATABASE_AUTH_TOKEN,
   });
-  
+
   db = drizzle(client, { schema });
 } else {
   // Use local SQLite with better-sqlite3
@@ -27,7 +27,7 @@ if (isTurso) {
   const { drizzle } = require('drizzle-orm/better-sqlite3');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const Database = require('better-sqlite3');
-  
+
   const dbPath = env.DATABASE_URL.replace('sqlite:', '');
   const dbDir = path.dirname(dbPath);
 

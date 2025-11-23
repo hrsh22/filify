@@ -27,7 +27,8 @@ const schema = z
         ensName: z.string().min(1, "ENS domain is required"),
         ensOwnerAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Wallet address is required"),
         buildCommand: z.string().optional(),
-        outputDir: z.string().optional()
+        outputDir: z.string().optional(),
+        frontendDir: z.string().optional()
     })
     .refine(
         (data) => {
@@ -108,7 +109,8 @@ export function NewProjectForm() {
             ensName: "",
             ensOwnerAddress: "",
             buildCommand: undefined,
-            outputDir: undefined
+            outputDir: undefined,
+            frontendDir: undefined
         }
     });
 
@@ -222,7 +224,8 @@ export function NewProjectForm() {
                 ensOwnerAddress: values.ensOwnerAddress,
                 ethereumRpcUrl: ETH_MAINNET_RPC, // Always use constant RPC
                 buildCommand: values.buildCommand || undefined,
-                outputDir: values.outputDir || undefined
+                outputDir: values.outputDir || undefined,
+                frontendDir: values.frontendDir || undefined
             });
             showToast("Project created!", "success");
             navigate("/dashboard");
@@ -361,6 +364,17 @@ export function NewProjectForm() {
                             <p className="text-sm text-destructive font-semibold">{form.formState.errors.repoBranch.message}</p>
                         ) : null}
                     </div>
+                </div>
+                <div className="space-y-3">
+                    <Label htmlFor="frontendDir">Frontend directory (optional)</Label>
+                    <Input id="frontendDir" placeholder="e.g., frontend, web, app" {...form.register("frontendDir")} />
+                    <p className="text-xs text-muted-foreground">
+                        If your frontend code is in a subdirectory, specify the path relative to the repository root. Leave empty if the frontend is
+                        at the root.
+                    </p>
+                    {form.formState.errors.frontendDir ? (
+                        <p className="text-sm text-destructive font-semibold">{form.formState.errors.frontendDir.message}</p>
+                    ) : null}
                 </div>
             </section>
 

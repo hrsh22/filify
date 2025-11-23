@@ -13,6 +13,7 @@ export interface Project {
   ethereumRpcUrl: string
   buildCommand?: string | null
   outputDir?: string | null
+  frontendDir?: string | null
   webhookEnabled: boolean
   createdAt: string
   updatedAt: string

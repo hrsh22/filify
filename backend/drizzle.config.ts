@@ -12,11 +12,11 @@ export default {
     dialect: 'sqlite',
     dbCredentials: isTurso
         ? {
-              url: databaseUrl,
-              authToken: process.env.DATABASE_AUTH_TOKEN,
-          }
+            url: databaseUrl,
+            authToken: process.env.DATABASE_AUTH_TOKEN,
+        }
         : {
-              url: databaseUrl.replace('sqlite:', ''),
-          },
+            url: databaseUrl.replace('sqlite:', ''),
+        },
 } satisfies Config;
 

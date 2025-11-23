@@ -17,6 +17,7 @@ interface BuildResult {
 interface BuildOptions {
     buildCommand?: string | null;
     outputDir?: string | null;
+    frontendDir?: string | null;
 }
 
 const OUTPUT_METADATA_FILENAME = '.output-dir';
@@ -40,14 +41,19 @@ class BuildService {
         options: BuildOptions = {}
     ): Promise<BuildResult> {
         const buildDir = getDeploymentBuildDir(deploymentId);
-        const { buildCommand, outputDir } = options;
+        const { buildCommand, outputDir, frontendDir } = options;
         let logs = '';
+
+        // Determine the working directory for the frontend (if frontendDir is specified)
+        const frontendWorkingDir = frontendDir ? path.join(buildDir, frontendDir) : buildDir;
 
         logger.info('Starting clone and build process', {
             deploymentId,
             repoUrl,
             branch,
             buildDir,
+            frontendDir: frontendDir || 'root',
+            frontendWorkingDir,
             buildCommand: buildCommand || 'default',
             outputDir: outputDir || 'auto-detect',
         });
@@ -63,6 +69,9 @@ class BuildService {
 
             // Clone repository with authentication
             logs += `Cloning repository: ${repoUrl} (branch: ${branch})\n`;
+            if (frontendDir) {
+                logs += `Frontend directory: ${frontendDir}\n`;
+            }
             const authUrl = repoUrl.replace('https://', `https://${token}@`);
 
             logger.info('Cloning repository', {
@@ -70,6 +79,7 @@ class BuildService {
                 repoUrl,
                 branch,
                 buildDir,
+                frontendDir,
             });
 
             await fs.rm(buildDir, { recursive: true, force: true }).catch(() => undefined);
@@ -77,9 +87,25 @@ class BuildService {
             logs += `✓ Repository cloned successfully\n\n`;
             logger.info('Repository cloned successfully', { deploymentId, buildDir });
 
+            // Verify frontend directory exists if specified
+            if (frontendDir) {
+                try {
+                    const stats = await fs.stat(frontendWorkingDir);
+                    if (!stats.isDirectory()) {
+                        throw new Error(`Frontend directory "${frontendDir}" exists but is not a directory`);
+                    }
+                    logs += `✓ Frontend directory found: ${frontendDir}\n\n`;
+                } catch (error) {
+                    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+                        throw new Error(`Frontend directory "${frontendDir}" not found in repository`);
+                    }
+                    throw error;
+                }
+            }
+
             // Determine project type
             logs += `Checking project structure...\n`;
-            const packageJsonPath = path.join(buildDir, 'package.json');
+            const packageJsonPath = path.join(frontendWorkingDir, 'package.json');
             const hasPackageJson = await fs
                 .access(packageJsonPath)
                 .then(() => true)
@@ -105,9 +131,9 @@ class BuildService {
                     logs += `Detected Next.js project\n`;
                     logger.info('Detected Next.js project', { deploymentId, packageName });
                     // Ensure a static export config exists
-                    const nextConfigPath = path.join(buildDir, 'next.config.js');
-                    const nextConfigMjsPath = path.join(buildDir, 'next.config.mjs');
-                    const nextConfigTsPath = path.join(buildDir, 'next.config.ts');
+                    const nextConfigPath = path.join(frontendWorkingDir, 'next.config.js');
+                    const nextConfigMjsPath = path.join(frontendWorkingDir, 'next.config.mjs');
+                    const nextConfigTsPath = path.join(frontendWorkingDir, 'next.config.ts');
                     let hasNextConfig = false;
                     for (const candidate of [nextConfigPath, nextConfigMjsPath, nextConfigTsPath]) {
                         try {
@@ -134,13 +160,13 @@ class BuildService {
 
             let detectedOutputDir: string;
             if (projectType === 'static') {
-                detectedOutputDir = await this.prepareStaticOutput(buildDir);
+                detectedOutputDir = await this.prepareStaticOutput(frontendWorkingDir);
             } else {
                 // Install dependencies
                 logs += `Installing dependencies...\n`;
-                logger.info('Installing dependencies', { deploymentId, buildDir });
+                logger.info('Installing dependencies', { deploymentId, frontendWorkingDir });
                 const installResult = await this.runCommand('npm install', deploymentId, {
-                    cwd: buildDir,
+                    cwd: frontendWorkingDir,
                 });
                 logs += installResult.stdout + installResult.stderr;
                 logs += `✓ Dependencies installed\n\n`;
@@ -153,9 +179,10 @@ class BuildService {
                     deploymentId,
                     buildCommand: buildCmd,
                     projectType,
+                    frontendWorkingDir,
                 });
                 const buildResult = await this.runCommand(buildCmd, deploymentId, {
-                    cwd: buildDir,
+                    cwd: frontendWorkingDir,
                     env: {
                         ...process.env,
                         NODE_ENV: 'production',
@@ -166,10 +193,10 @@ class BuildService {
                 logger.info('Build completed successfully', { deploymentId, buildCommand: buildCmd });
 
                 detectedOutputDir = outputDir
-                    ? path.join(buildDir, outputDir)
-                    : await this.detectOutputDir(buildDir);
+                    ? path.join(frontendWorkingDir, outputDir)
+                    : await this.detectOutputDir(frontendWorkingDir);
             }
-            // Record detected output directory for later retrieval
+            // Record detected output directory for later retrieval (relative to buildDir)
             const relativeOutputDir = path.relative(buildDir, detectedOutputDir) || '.';
             await fs.writeFile(path.join(buildDir, OUTPUT_METADATA_FILENAME), relativeOutputDir, 'utf-8');
 

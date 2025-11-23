@@ -11,6 +11,7 @@ type CreateProjectPayload = {
   ethereumRpcUrl: string
   buildCommand?: string
   outputDir?: string
+  frontendDir?: string
 }
 
 type UpdateProjectPayload = Partial<CreateProjectPayload> & {

@@ -36,6 +36,13 @@
       "when": 1763802000000,
       "tag": "0004_backend_filecoin_upload",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1763878921277,
+      "tag": "0005_silly_the_anarchist",
+      "breakpoints": true
     }
   ]
 }

@@ -109,6 +109,7 @@ export class ProjectsController {
       ethereumRpcUrl,
       buildCommand,
       outputDir,
+      frontendDir,
     } = req.body;
 
     const normalizedOwnerAddress = ensOwnerAddress.toLowerCase();
@@ -162,6 +163,7 @@ export class ProjectsController {
           ethereumRpcUrl,
           buildCommand: buildCommand || null,
           outputDir: outputDir || null,
+          frontendDir: frontendDir || null,
           webhookEnabled: true,
           webhookSecret: encryptedSecret,
           createdAt: new Date(),

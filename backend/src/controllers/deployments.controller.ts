@@ -864,6 +864,7 @@ export class DeploymentsController {
             const result = await buildService.cloneAndBuild(project.repoUrl, project.repoBranch || 'main', project.user.githubToken, deploymentId, {
                 buildCommand: project.buildCommand ?? undefined,
                 outputDir: project.outputDir ?? undefined,
+                frontendDir: project.frontendDir ?? undefined,
             });
 
             await db
