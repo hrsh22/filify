@@ -155,7 +155,11 @@ export function DeploymentDetailPage() {
             {/* Page Header */}
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                 <div className="space-y-2">
-                    <Button variant="ghost" size="sm" onClick={() => deployment.projectId ? navigate(`/projects/${deployment.projectId}`) : navigate("/dashboard")} className="pl-0">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => (deployment.projectId ? navigate(`/projects/${deployment.projectId}`) : navigate("/dashboard"))}
+                        className="pl-0">
                         <ArrowLeft className="h-4 w-4" />
                         Back
                     </Button>
@@ -164,9 +168,7 @@ export function DeploymentDetailPage() {
                         <span className="text-sm font-medium text-primary">Deployment</span>
                     </div>
                     <h1 className="text-4xl font-bold tracking-tight">#{deployment.id.slice(0, 8)}</h1>
-                    <p className="text-muted-foreground">
-                        Started {formatDistanceToNow(new Date(deployment.createdAt), { addSuffix: true })}
-                    </p>
+                    <p className="text-muted-foreground">Started {formatDistanceToNow(new Date(deployment.createdAt), { addSuffix: true })}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                     <DeploymentStatusBadge status={deployment.status} />
@@ -191,24 +193,14 @@ export function DeploymentDetailPage() {
             <div className="grid gap-6 lg:grid-cols-[2fr,1fr]">
                 {/* Status Column */}
                 <div className="space-y-6">
-                <Card>
-                    <CardHeader>
+                    <Card>
+                        <CardHeader>
                             <CardTitle>Progress</CardTitle>
-                    </CardHeader>
+                        </CardHeader>
                         <CardContent>
-                        <DeploymentSteps status={deployment.status} />
+                            <DeploymentSteps status={deployment.status} />
                         </CardContent>
                     </Card>
-
-                    {/* Status-specific messages */}
-                    {isWaitingForUpload && (
-                        <Alert variant="info">
-                            <AlertDescription className="space-y-2">
-                                <p className="font-semibold">Uploading to Filecoin</p>
-                                <p className="text-sm">Keep this tab open so the browser can finish sending artifacts to Filecoin. This will update automatically once complete.</p>
-                            </AlertDescription>
-                        </Alert>
-                    )}
 
                     {isAwaitingSignature && (
                         <Alert variant="warning">
@@ -218,9 +210,7 @@ export function DeploymentDetailPage() {
                                 <Button onClick={handleSignEns} disabled={!canSignEns || signingEns} size="sm">
                                     {signingEns ? "Waiting for wallet…" : "Sign ENS update"}
                                 </Button>
-                                {!canSignEns && (
-                                    <p className="text-xs text-muted-foreground">Connect your wallet to sign this ENS transaction.</p>
-                                )}
+                                {!canSignEns && <p className="text-xs text-muted-foreground">Connect your wallet to sign this ENS transaction.</p>}
                             </AlertDescription>
                         </Alert>
                     )}
@@ -235,8 +225,7 @@ export function DeploymentDetailPage() {
                                         href={etherscanUrl}
                                         target="_blank"
                                         rel="noreferrer"
-                                        className="inline-flex items-center gap-1 text-sm text-primary hover:underline underline-offset-2"
-                                    >
+                                        className="inline-flex items-center gap-1 text-sm text-primary hover:underline underline-offset-2">
                                         View on Etherscan
                                         <ExternalLink className="h-3 w-3" />
                                     </a>
@@ -255,8 +244,7 @@ export function DeploymentDetailPage() {
                                             href={ipfsUrl}
                                             target="_blank"
                                             rel="noreferrer"
-                                            className="inline-flex items-center gap-1 text-sm hover:underline underline-offset-2"
-                                        >
+                                            className="inline-flex items-center gap-1 text-sm hover:underline underline-offset-2">
                                             View on IPFS
                                             <ExternalLink className="h-3 w-3" />
                                         </a>
@@ -266,8 +254,7 @@ export function DeploymentDetailPage() {
                                             href={ensUrl}
                                             target="_blank"
                                             rel="noreferrer"
-                                            className="inline-flex items-center gap-1 text-sm hover:underline underline-offset-2"
-                                        >
+                                            className="inline-flex items-center gap-1 text-sm hover:underline underline-offset-2">
                                             View ENS: {project?.ensName}
                                             <ExternalLink className="h-3 w-3" />
                                         </a>
@@ -277,8 +264,7 @@ export function DeploymentDetailPage() {
                                             href={etherscanUrl}
                                             target="_blank"
                                             rel="noreferrer"
-                                            className="inline-flex items-center gap-1 text-sm hover:underline underline-offset-2"
-                                        >
+                                            className="inline-flex items-center gap-1 text-sm hover:underline underline-offset-2">
                                             ENS transaction
                                             <ExternalLink className="h-3 w-3" />
                                         </a>
@@ -301,7 +287,7 @@ export function DeploymentDetailPage() {
                     )}
 
                     <DeploymentLogs logs={deployment.buildLog} />
-                            </div>
+                </div>
 
                 {/* Metadata Sidebar */}
                 <Card>
@@ -321,18 +307,18 @@ export function DeploymentDetailPage() {
                         <Separator />
                         {deployment.commitSha && (
                             <>
-                            <div>
+                                <div>
                                     <p className="text-muted-foreground mb-1">Commit</p>
-                                <a
-                                    href={project?.repoUrl ? `${project.repoUrl}/commit/${deployment.commitSha}` : undefined}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                        className="font-mono text-xs text-primary hover:underline underline-offset-2 break-all"
-                                    >
+                                    <a
+                                        href={project?.repoUrl ? `${project.repoUrl}/commit/${deployment.commitSha}` : undefined}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="font-mono text-xs text-primary hover:underline underline-offset-2 break-all">
                                         {deployment.commitSha.slice(0, 7)}
-                                        {deployment.commitMessage && ` – ${deployment.commitMessage.slice(0, 30)}${deployment.commitMessage.length > 30 ? "…" : ""}`}
-                                </a>
-                            </div>
+                                        {deployment.commitMessage &&
+                                            ` – ${deployment.commitMessage.slice(0, 30)}${deployment.commitMessage.length > 30 ? "…" : ""}`}
+                                    </a>
+                                </div>
                                 <Separator />
                             </>
                         )}
@@ -353,8 +339,7 @@ export function DeploymentDetailPage() {
                                     href={etherscanUrl}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="font-mono text-xs text-primary hover:underline underline-offset-2 break-all"
-                                >
+                                    className="font-mono text-xs text-primary hover:underline underline-offset-2 break-all">
                                     {deployment.ensTxHash.slice(0, 10)}...
                                 </a>
                             ) : (
