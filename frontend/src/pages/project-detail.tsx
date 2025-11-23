@@ -14,7 +14,6 @@ import { useToast } from "@/context/toast-context";
 import { DeploymentStatusBadge } from "@/components/deployments/deployment-status-badge";
 import { useAutoDeployPoller } from "@/hooks/use-auto-deploy-poller";
 
-const RESUMABLE_STATUSES = new Set(["failed", "pending_upload", "uploading", "updating_ens", "awaiting_signature", "awaiting_confirmation"]);
 const ACTIVE_STATUSES = new Set([
     "pending_build",
     "cloning",
@@ -32,7 +31,6 @@ export function ProjectDetailPage() {
     const { project, loading, error, refresh } = useProject(projectId);
     const { showToast } = useToast();
     const [isDeploying, setIsDeploying] = useState(false);
-    const [resumeFromPrevious, setResumeFromPrevious] = useState(false);
     const [branchOptions, setBranchOptions] = useState<string[]>([]);
     const [branchLoading, setBranchLoading] = useState(false);
     const [branchSaving, setBranchSaving] = useState(false);
@@ -41,15 +39,7 @@ export function ProjectDetailPage() {
     useAutoDeployPoller(true);
 
     const latestDeployment = project?.deployments?.[0];
-    const latestStatusLabel = latestDeployment ? latestDeployment.status.replace("_", " ") : "n/a";
-    const canResume = useMemo(() => Boolean(latestDeployment && RESUMABLE_STATUSES.has(latestDeployment.status)), [latestDeployment]);
     const projectBusy = useMemo(() => Boolean(latestDeployment && ACTIVE_STATUSES.has(latestDeployment.status)), [latestDeployment]);
-
-    useEffect(() => {
-        if (!canResume) {
-            setResumeFromPrevious(false);
-        }
-    }, [canResume]);
 
     const handleWebhookToggle = async () => {
         if (!project) return;
@@ -120,11 +110,8 @@ export function ProjectDetailPage() {
         if (!project) return;
         try {
             setIsDeploying(true);
-            const { deploymentId } = await deploymentsService.create(project.id, {
-                resumeFromPrevious: canResume && resumeFromPrevious
-            });
+            const { deploymentId } = await deploymentsService.create(project.id);
             showToast("Deployment started", "success");
-            setResumeFromPrevious(false);
             navigate(`/deployments/${deploymentId}`);
         } catch (err) {
             console.error("[ProjectDetail][deploy]", err);
@@ -234,22 +221,6 @@ export function ProjectDetailPage() {
                     </p>
                 </CardContent>
             </Card>
-
-            {canResume ? (
-                <label className="flex items-start gap-3 rounded-xl bg-muted/30 p-5 text-sm font-medium text-muted-foreground shadow-neo-inset cursor-pointer transition-neo hover:bg-muted/40">
-                    <input
-                        type="checkbox"
-                        className="mt-1 h-5 w-5 rounded-lg border-2 border-border accent-primary shadow-neo-sm cursor-pointer"
-                        checked={resumeFromPrevious}
-                        onChange={(event) => setResumeFromPrevious(event.target.checked)}
-                        disabled={isDeploying || projectBusy}
-                    />
-                    <div className="flex-1 space-y-1">
-                        <span className="font-semibold text-foreground">Resume from last build (status: {latestStatusLabel})</span>
-                        <span className="block text-xs">Uncheck to run a full deployment and clone the repository again.</span>
-                    </div>
-                </label>
-            ) : null}
 
             <Card>
                 <CardHeader>

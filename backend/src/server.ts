@@ -57,17 +57,22 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Session configuration
-// Use the same database file as the main app (consolidated storage)
-// connect-sqlite3 will create a 'sessions' table in the same database
-const dbPath = env.DATABASE_URL.replace('sqlite:', '');
-const dbDir = path.dirname(dbPath);
-const dbFile = path.basename(dbPath);
+// For Turso (remote SQLite), use a local SQLite file for sessions
+// For local SQLite, use the same database file
+const isTurso = env.DATABASE_URL.startsWith('libsql://') || env.DATABASE_URL.startsWith('https://');
+const sessionDbPath = isTurso ? './data/sessions.db' : env.DATABASE_URL.replace('sqlite:', '');
+const sessionDbDir = path.dirname(sessionDbPath);
+const sessionDbFile = path.basename(sessionDbPath);
+
+if (!fs.existsSync(sessionDbDir)) {
+    fs.mkdirSync(sessionDbDir, { recursive: true });
+}
 
 app.use(
     session({
         store: new SessionStore({
-            db: dbFile, // Use same filename as main DB
-            dir: dbDir || './data', // Use same directory as main DB
+            db: sessionDbFile,
+            dir: sessionDbDir || './data',
         }),
         secret: env.SESSION_SECRET,
         resave: false,

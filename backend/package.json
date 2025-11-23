@@ -19,6 +19,7 @@
   "dependencies": {
     "@ipld/car": "^5.4.2",
     "@ipld/dag-pb": "^4.1.5",
+    "@libsql/client": "^0.15.15",
     "@octokit/rest": "^20.0.2",
     "archiver": "^7.0.1",
     "blockstore-core": "^6.1.1",

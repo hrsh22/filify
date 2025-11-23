@@ -17,8 +17,6 @@ interface BuildResult {
 interface BuildOptions {
     buildCommand?: string | null;
     outputDir?: string | null;
-    reuseDir?: string | null;
-    reuseLabel?: string | null;
 }
 
 const OUTPUT_METADATA_FILENAME = '.output-dir';
@@ -42,7 +40,7 @@ class BuildService {
         options: BuildOptions = {}
     ): Promise<BuildResult> {
         const buildDir = getDeploymentBuildDir(deploymentId);
-        const { buildCommand, outputDir, reuseDir, reuseLabel } = options;
+        const { buildCommand, outputDir } = options;
         let logs = '';
 
         logger.info('Starting clone and build process', {
@@ -50,7 +48,6 @@ class BuildService {
             repoUrl,
             branch,
             buildDir,
-            reuseDir: reuseDir ? 'yes' : 'no',
             buildCommand: buildCommand || 'default',
             outputDir: outputDir || 'auto-detect',
         });
@@ -60,33 +57,25 @@ class BuildService {
             await fs.mkdir(this.BUILD_ROOT, { recursive: true });
             logger.debug('Build root directory ensured', { buildRoot: this.BUILD_ROOT });
 
-            if (reuseDir) {
-                logs += `Reusing previous workspace${reuseLabel ? ` from deployment ${reuseLabel}` : ''}\n`;
-                logger.info(`Reusing workspace from ${reuseDir} for deployment ${deploymentId}`);
-                await fs.rm(buildDir, { recursive: true, force: true }).catch(() => undefined);
-                await fs.cp(reuseDir, buildDir, { recursive: true });
-                logs += `✓ Copied previous workspace\n\n`;
-            } else {
-                // Decrypt GitHub token
-                logger.debug('Decrypting GitHub token for clone', { deploymentId });
-                const token = encryptionService.decrypt(encryptedToken);
+            // Decrypt GitHub token
+            logger.debug('Decrypting GitHub token for clone', { deploymentId });
+            const token = encryptionService.decrypt(encryptedToken);
 
-                // Clone repository with authentication
-                logs += `Cloning repository: ${repoUrl} (branch: ${branch})\n`;
-                const authUrl = repoUrl.replace('https://', `https://${token}@`);
+            // Clone repository with authentication
+            logs += `Cloning repository: ${repoUrl} (branch: ${branch})\n`;
+            const authUrl = repoUrl.replace('https://', `https://${token}@`);
 
-                logger.info('Cloning repository', {
-                    deploymentId,
-                    repoUrl,
-                    branch,
-                    buildDir,
-                });
+            logger.info('Cloning repository', {
+                deploymentId,
+                repoUrl,
+                branch,
+                buildDir,
+            });
 
-                await fs.rm(buildDir, { recursive: true, force: true }).catch(() => undefined);
-                await this.runCommand(`git clone --single-branch --branch ${branch} ${authUrl} ${buildDir}`, deploymentId);
-                logs += `✓ Repository cloned successfully\n\n`;
-                logger.info('Repository cloned successfully', { deploymentId, buildDir });
-            }
+            await fs.rm(buildDir, { recursive: true, force: true }).catch(() => undefined);
+            await this.runCommand(`git clone --single-branch --branch ${branch} ${authUrl} ${buildDir}`, deploymentId);
+            logs += `✓ Repository cloned successfully\n\n`;
+            logger.info('Repository cloned successfully', { deploymentId, buildDir });
 
             // Determine project type
             logs += `Checking project structure...\n`;
@@ -425,6 +414,24 @@ class BuildService {
             logger.info('Cleanup completed', { deletedCount, totalEntries: entries.length });
         } else {
             logger.debug('Cleanup completed, no expired artifacts found', { totalEntries: entries.length });
+        }
+    }
+
+    async cleanupDeploymentBuild(deploymentId: string): Promise<void> {
+        const buildDir = getDeploymentBuildDir(deploymentId);
+        try {
+            await fs.access(buildDir);
+            await fs.rm(buildDir, { recursive: true, force: true });
+            logger.info('Cleaned up deployment build directory', { deploymentId, buildDir });
+        } catch (error) {
+            // Ignore if directory doesn't exist
+            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+                logger.warn('Failed to cleanup deployment build directory', {
+                    deploymentId,
+                    buildDir,
+                    error: error instanceof Error ? error.message : String(error),
+                });
+            }
         }
     }
 }

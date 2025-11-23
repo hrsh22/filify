@@ -12,12 +12,8 @@ export type PreparedEnsPayload = {
 }
 
 export const deploymentsService = {
-  async create(projectId: string, options?: { resumeFromPrevious?: boolean }) {
-    const payload: Record<string, unknown> = { projectId }
-    if (options?.resumeFromPrevious) {
-      payload.resumeFromPrevious = true
-    }
-    const { data } = await api.post<{ deploymentId: string }>('/deployments', payload)
+  async create(projectId: string) {
+    const { data } = await api.post<{ deploymentId: string }>('/deployments', { projectId })
     return data
   },
   async getById(id: string) {

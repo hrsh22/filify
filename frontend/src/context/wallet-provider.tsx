@@ -22,7 +22,7 @@ const metadata = {
   icons: ['https://filify.app/icon.png'],
 }
 
-const networks = [mainnet]
+const networks = [mainnet] as [typeof mainnet]
 
 const wagmiAdapter = new WagmiAdapter({
   networks,

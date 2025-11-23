@@ -120,7 +120,7 @@ export function useAutoDeployPoller(enabled = true) {
 
         const message = error instanceof Error ? error.message : 'Upload failed'
 
-        if (stage === 'download' || stage === 'upload' || stage === 'prepare') {
+        if (stage === 'upload' || stage === 'prepare') {
           try {
             await deploymentsService.markUploadFailed(deployment.id, message)
           } catch (markError) {

@@ -45,7 +45,6 @@ export const uploadFailureSchema = z.object({
 export const createDeploymentSchema = z.object({
     body: z.object({
         projectId: z.string().min(1),
-        resumeFromPrevious: z.boolean().optional().default(false),
     }),
 });
 

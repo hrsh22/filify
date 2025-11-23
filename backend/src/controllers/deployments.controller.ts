@@ -11,6 +11,7 @@ import { ensService } from '../services/ens.service';
 import { logger } from '../utils/logger';
 import { getDeploymentBuildDir } from '../utils/paths';
 import { deploymentQueue } from '../services/deployment-queue.service';
+import { env } from '../config/env';
 
 async function recoverCarRootCid(carPath: string): Promise<string | null> {
     try {
@@ -39,13 +40,6 @@ async function recoverCarRootCid(carPath: string): Promise<string | null> {
 }
 
 export class DeploymentsController {
-    private static readonly RESUMABLE_STATUSES = new Set([
-        'failed',
-        'pending_upload',
-        'uploading',
-        'awaiting_signature',
-        'awaiting_confirmation',
-    ]);
     private static readonly ACTIVE_STATUSES = [
         'pending_build',
         'cloning',
@@ -70,13 +64,12 @@ export class DeploymentsController {
 
     // Create new deployment (start build process)
     async create(req: Request, res: Response) {
-        const { projectId, resumeFromPrevious = false } = req.body;
+        const { projectId } = req.body;
         const userId = (req.user as any).id;
 
         logger.info('Creating new deployment', {
             projectId,
             userId,
-            resumeFromPrevious,
         });
 
         try {
@@ -98,12 +91,12 @@ export class DeploymentsController {
             }
 
             const activeDeployment = await db.query.deployments.findFirst({
-                where: (deployment, { eq: eqField, inArray: inArrayField, and: andField }) =>
+                where: (deployment: any, { eq: eqField, inArray: inArrayField, and: andField }: any) =>
                     andField(
                         eqField(deployment.projectId, projectId),
                         inArrayField(deployment.status, DeploymentsController.ACTIVE_STATUSES)
                     ),
-                orderBy: (deployment, { desc: orderDesc }) => [orderDesc(deployment.createdAt)],
+                orderBy: (deployment: any, { desc: orderDesc }: any) => [orderDesc(deployment.createdAt)],
             });
 
             if (activeDeployment) {
@@ -119,51 +112,12 @@ export class DeploymentsController {
                 });
             }
 
-            let reuseDir: string | undefined;
-            let reuseSourceDeploymentId: string | undefined;
-
-            if (resumeFromPrevious) {
-                const previousDeployment = await db.query.deployments.findFirst({
-                    where: eq(deployments.projectId, projectId),
-                    orderBy: (dep, { desc }) => [desc(dep.createdAt)],
-                });
-
-                if (
-                    !previousDeployment ||
-                    !DeploymentsController.RESUMABLE_STATUSES.has(previousDeployment.status)
-                ) {
-                    return res.status(400).json({
-                        error: 'NoResumableDeployment',
-                        message:
-                            'No previous deployment with reusable build artifacts was found. Please run a full deployment.',
-                    });
-                }
-
-                const previousDir = getDeploymentBuildDir(previousDeployment.id);
-                try {
-                    await fs.access(previousDir);
-                    reuseDir = previousDir;
-                    reuseSourceDeploymentId = previousDeployment.id;
-                    logger.info(
-                        `Deployment will reuse workspace from deployment ${reuseSourceDeploymentId}`
-                    );
-                } catch {
-                    return res.status(400).json({
-                        error: 'ArtifactsMissing',
-                        message:
-                            'Previous build artifacts are missing. Please run a full deployment to recreate the build output.',
-                    });
-                }
-            }
-
             const deploymentId = generateId();
 
             logger.info('Creating deployment record', {
                 deploymentId,
                 projectId,
                 projectName: project.name,
-                reuseDir: reuseDir ? 'yes' : 'no',
-                reuseSourceDeploymentId,
             });
 
             // Create deployment record
@@ -184,7 +138,7 @@ export class DeploymentsController {
             });
 
             deploymentQueue.enqueue(projectId, () =>
-                this.runBuildPipeline(deploymentId, project, { reuseDir, reuseSourceDeploymentId })
+                this.runBuildPipeline(deploymentId, project)
             );
 
             logger.info('Deployment created and queued', {
@@ -417,6 +371,13 @@ export class DeploymentsController {
                 })
                 .where(eq(deployments.id, id));
 
+            // Cleanup build directory if enabled
+            if (env.CLEANUP_BUILDS_ON_COMPLETE) {
+                await buildService.cleanupDeploymentBuild(id).catch((error) => {
+                    logger.warn('Failed to cleanup build directory after success', { deploymentId: id, error });
+                });
+            }
+
             res.json({
                 status: 'success',
                 txHash: result.txHash,
@@ -436,6 +397,13 @@ export class DeploymentsController {
                     completedAt: new Date(),
                 })
                 .where(eq(deployments.id, id));
+
+            // Cleanup build directory if enabled
+            if (env.CLEANUP_BUILDS_ON_COMPLETE) {
+                await buildService.cleanupDeploymentBuild(id).catch((error) => {
+                    logger.warn('Failed to cleanup build directory after failure', { deploymentId: id, error });
+                });
+            }
 
             res.status(500).json({
                 error: 'ENSConfirmationFailed',
@@ -487,6 +455,13 @@ export class DeploymentsController {
                     completedAt: new Date(),
                 })
                 .where(eq(deployments.id, id));
+
+            // Cleanup build directory if enabled
+            if (env.CLEANUP_BUILDS_ON_COMPLETE) {
+                await buildService.cleanupDeploymentBuild(id).catch((error) => {
+                    logger.warn('Failed to cleanup build directory after upload failure', { deploymentId: id, error });
+                });
+            }
 
             logger.info('Deployment marked as failed', {
                 deploymentId: id,
@@ -591,7 +566,7 @@ export class DeploymentsController {
                 statusFilter: status,
             });
 
-            res.json(rows.map((row) => row.deployment));
+            res.json(rows.map((row: any) => row.deployment));
         } catch (error) {
             logger.error('Failed to list deployments:', error);
             res.status(500).json({
@@ -865,8 +840,7 @@ export class DeploymentsController {
     // Run the build process for a deployment
     async runBuildPipeline(
         deploymentId: string,
-        project: any,
-        options?: { reuseDir?: string; reuseSourceDeploymentId?: string }
+        project: any
     ) {
 
         try {
@@ -876,7 +850,6 @@ export class DeploymentsController {
                 projectName: project.name,
                 repoUrl: project.repoUrl,
                 repoBranch: project.repoBranch || 'main',
-                reuseDir: options?.reuseDir ? 'yes' : 'no',
             });
 
             // Update status to cloning when build actually starts
@@ -891,8 +864,6 @@ export class DeploymentsController {
             const result = await buildService.cloneAndBuild(project.repoUrl, project.repoBranch || 'main', project.user.githubToken, deploymentId, {
                 buildCommand: project.buildCommand ?? undefined,
                 outputDir: project.outputDir ?? undefined,
-                reuseDir: options?.reuseDir,
-                reuseLabel: options?.reuseSourceDeploymentId,
             });
 
             await db
@@ -941,6 +912,13 @@ export class DeploymentsController {
                     completedAt: new Date(),
                 })
                 .where(eq(deployments.id, deploymentId));
+
+            // Cleanup build directory if enabled
+            if (env.CLEANUP_BUILDS_ON_COMPLETE) {
+                await buildService.cleanupDeploymentBuild(deploymentId).catch((cleanupError) => {
+                    logger.warn('Failed to cleanup build directory after build failure', { deploymentId, error: cleanupError });
+                });
+            }
         }
     }
 

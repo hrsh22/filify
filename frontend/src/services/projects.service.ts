@@ -13,7 +13,9 @@ type CreateProjectPayload = {
   outputDir?: string
 }
 
-type UpdateProjectPayload = Partial<CreateProjectPayload>
+type UpdateProjectPayload = Partial<CreateProjectPayload> & {
+  autoDeployBranch?: string
+}
 
 export const projectsService = {
   async getAll() {

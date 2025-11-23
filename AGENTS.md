@@ -74,7 +74,6 @@ Filify is a decentralized deployment platform that enables developers to deploy 
 - Filecoin upload with progress monitoring
 - ENS domain configuration
 - Deployment history viewing
-- Resume failed deployments capability
 - Auto-deploy polling that uploads backend-built artifacts automatically when webhooks fire
 - Project settings UI for monitoring GitHub push webhook status, switching the auto-deploy branch, or disabling auto-deploy if needed
 
@@ -157,7 +156,7 @@ Filify is a decentralized deployment platform that enables developers to deploy 
 - **Output Detection**: Auto-detects output directories (out, dist, build, .next)
 - **Logs**: Real-time build logs stored in database
 
-**Current State**: Build service automatically detects Next.js, Vite (via the standard Node.js flow/output detection), and other Node/static projects. For Next.js, it creates a static export config if missing. Builds run in isolated directories under the repo-level `builds/` folder (auto-cleaned after 24h), and only one build per project runs at a time via an in-memory queue. Each successful build now summarizes the output directory tree (file/folder counts plus sample paths) before emitting an `artifact.car` file alongside the workspace, so the frontend never has to repackage artifacts. Build logs are captured, output folders and CAR metadata are recorded for artifact downloads, and failed runs can still resume from cached workspaces.
+**Current State**: Build service automatically detects Next.js, Vite (via the standard Node.js flow/output detection), and other Node/static projects. For Next.js, it creates a static export config if missing. Builds run in isolated directories under the repo-level `builds/` folder (auto-cleaned after deployment completes if `CLEANUP_BUILDS_ON_COMPLETE=true`, otherwise cleaned after 24h), and only one build per project runs at a time via an in-memory queue. Each successful build now summarizes the output directory tree (file/folder counts plus sample paths) before emitting an `artifact.car` file alongside the workspace, so the frontend never has to repackage artifacts. Build logs are captured, output folders and CAR metadata are recorded for artifact downloads.
 
 ### Filecoin Integration
 
@@ -183,7 +182,7 @@ Filify is a decentralized deployment platform that enables developers to deploy 
 pending_build → cloning → building → pending_upload → uploading → awaiting_signature → awaiting_confirmation → success/failed
 ```
 
-**Current State**: The backend records queue/build progress (`pending_build`/`cloning`/`building`), then exposes artifacts through `pending_upload`. The frontend auto-deploy poller transitions deployments to `uploading` while it pushes artifacts to Filecoin. Once the backend prepares the ENS transaction, deployments move to `awaiting_signature` until the wallet signs and `awaiting_confirmation` while Ethereum finalizes. Manual uploads still use the same statuses, and failed deployments can be resumed from previous build artifacts.
+**Current State**: The backend records queue/build progress (`pending_build`/`cloning`/`building`), then exposes artifacts through `pending_upload`. The frontend auto-deploy poller transitions deployments to `uploading` while it pushes artifacts to Filecoin. Once the backend prepares the ENS transaction, deployments move to `awaiting_signature` until the wallet signs and `awaiting_confirmation` while Ethereum finalizes. Build directories are automatically cleaned up after deployment completes (success or failed) if `CLEANUP_BUILDS_ON_COMPLETE` is enabled.
 
 ---
 
@@ -315,15 +314,7 @@ The build service automatically detects project types:
 
 Auto-detects in order: `out`, `dist`, `build`, `.next`, `public`
 
-### Resume Deployment Feature
-
-Failed deployments can be resumed from previous builds:
-
-- Reuses build artifacts from previous deployment
-- Skips cloning and building steps
-- Continues from upload or ENS update phase
-
-**Status**: Build detection logic is stable. Supports Next.js (with auto static export config), Node.js projects, and static sites. Output directory auto-detection works for common patterns (out, dist, build, .next, public). Resume feature allows reusing previous build artifacts.
+**Status**: Build detection logic is stable. Supports Next.js (with auto static export config), Node.js projects, and static sites. Output directory auto-detection works for common patterns (out, dist, build, .next, public).
 
 ### Auto Deploy Pipeline
 

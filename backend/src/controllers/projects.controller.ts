@@ -26,7 +26,7 @@ export class ProjectsController {
         with: {
           deployments: {
             limit: 1,
-            orderBy: (deployments, { desc }) => [desc(deployments.createdAt)],
+            orderBy: (deployments: any, { desc }: any) => [desc(deployments.createdAt)],
           },
         },
       });
@@ -61,7 +61,7 @@ export class ProjectsController {
         where: and(eq(projects.id, id), eq(projects.userId, userId)),
         with: {
           deployments: {
-            orderBy: (deployments, { desc }) => [desc(deployments.createdAt)],
+            orderBy: (deployments: any, { desc }: any) => [desc(deployments.createdAt)],
             limit: 10,
           },
         },

@@ -18,6 +18,7 @@ const envSchema = z.object({
 
   // Database
   DATABASE_URL: z.string().default('sqlite:./data/dev.db'),
+  DATABASE_AUTH_TOKEN: z.string().optional(), // Required for Turso
 
   // Encryption (must be 64 character hex string for 32 bytes)
   ENCRYPTION_KEY: z.string().length(64),
@@ -25,6 +26,9 @@ const envSchema = z.object({
 
   // Defaults
   DEFAULT_ETHEREUM_RPC: z.string().url().default(`https://eth-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_KEY}`),
+
+  // Build cleanup
+  CLEANUP_BUILDS_ON_COMPLETE: z.string().default('true').transform((val) => val === 'true'),
 });
 
 export const env = envSchema.parse(process.env);

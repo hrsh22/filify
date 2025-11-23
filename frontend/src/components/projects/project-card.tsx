@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ExternalLink, Rocket, GitBranch, FolderOutput, Terminal, AlertCircle, ArrowRight } from "lucide-react";
 import { AxiosError } from "axios";
@@ -28,7 +28,6 @@ const statusVariantMap: Record<string, "default" | "success" | "warning" | "dest
     cancelled: "default"
 };
 
-const RESUMABLE_STATUSES = new Set(["failed", "pending_upload", "uploading", "updating_ens", "awaiting_signature", "awaiting_confirmation"]);
 const ACTIVE_STATUSES = new Set([
     "pending_build",
     "cloning",
@@ -45,26 +44,14 @@ export function ProjectCard({ project, onChange }: ProjectCardProps) {
     const { showToast } = useToast();
     const [isDeploying, setIsDeploying] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
-    const [resumeFromPrevious, setResumeFromPrevious] = useState(false);
     const latestDeployment = project.deployments?.[0];
-    const lastStatusLabel = latestDeployment ? latestDeployment.status.replace("_", " ") : "unknown";
-    const canResume = Boolean(latestDeployment && RESUMABLE_STATUSES.has(latestDeployment.status));
     const projectBusy = Boolean(latestDeployment && ACTIVE_STATUSES.has(latestDeployment.status));
-
-    useEffect(() => {
-        if (!canResume) {
-            setResumeFromPrevious(false);
-        }
-    }, [canResume]);
 
     const handleDeploy = async () => {
         try {
             setIsDeploying(true);
-            const { deploymentId } = await deploymentsService.create(project.id, {
-                resumeFromPrevious: canResume && resumeFromPrevious
-            });
+            const { deploymentId } = await deploymentsService.create(project.id);
             showToast("Deployment started", "success");
-            setResumeFromPrevious(false);
             navigate(`/deployments/${deploymentId}`);
         } catch (error) {
             console.error("[ProjectCard][deploy]", error);
@@ -180,25 +167,6 @@ export function ProjectCard({ project, onChange }: ProjectCardProps) {
                     </div>
                 ) : null}
             </div>
-
-            {canResume ? (
-                <label className="flex items-start gap-3 rounded-xl bg-muted/30 p-4 text-sm font-medium text-muted-foreground shadow-neo-inset cursor-pointer transition-neo hover:bg-muted/40">
-                    <input
-                        type="checkbox"
-                        className="mt-1 h-5 w-5 rounded-lg border-2 border-border accent-primary shadow-neo-sm cursor-pointer"
-                        checked={resumeFromPrevious}
-                        onChange={(event) => setResumeFromPrevious(event.target.checked)}
-                        disabled={isDeploying}
-                    />
-                    <div className="flex-1 space-y-1">
-                        <div className="flex items-center gap-2 font-semibold text-foreground">
-                            <AlertCircle className="h-4 w-4" />
-                            Resume from last build (status: {lastStatusLabel})
-                        </div>
-                        <p className="text-xs">Uncheck to start a fresh deployment (will re-clone the repository).</p>
-                    </div>
-                </label>
-            ) : null}
 
             <div className="flex flex-wrap gap-3">
                 <Button onClick={handleDeploy} disabled={isDeploying || projectBusy} className="flex-1 min-w-[140px]">

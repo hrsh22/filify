@@ -74,6 +74,13 @@ This document lists all required and optional environment variables for the back
     - Used for ENS updates
     - Example: `DEFAULT_ETHEREUM_RPC=https://eth-mainnet.g.alchemy.com/v2/${process.env.VITE_ALCHEMY_KEY}`
 
+### Build Cleanup
+
+- **`CLEANUP_BUILDS_ON_COMPLETE`** (optional, default: `true`)
+    - Whether to automatically delete build directories after deployment completes (success or failed)
+    - Set to `false` to keep build artifacts for debugging
+    - Example: `CLEANUP_BUILDS_ON_COMPLETE=true`
+
 ## Example .env File
 
 ```env
@@ -101,6 +108,9 @@ GITHUB_WEBHOOK_SECRET_ENCRYPTION_KEY=your_second_64_character_hex_key
 
 # Default Ethereum RPC
 DEFAULT_ETHEREUM_RPC=https://eth-mainnet.g.alchemy.com/v2/${process.env.VITE_ALCHEMY_KEY}
+
+# Build Cleanup (set to false to keep build artifacts)
+CLEANUP_BUILDS_ON_COMPLETE=true
 ```
 
 ## Quick Setup Commands

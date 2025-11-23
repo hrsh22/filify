@@ -205,12 +205,10 @@ export async function buildCarFromDirectory(
   let rootCid: CID | null = null;
 
   const { importer } = await import('ipfs-unixfs-importer');
-  const { sha256 } = await import('multiformats/hashes/sha2');
   for await (const entry of importer(iterateFiles(sourceDir, sourceDir), blockstore as any, {
     cidVersion: 1,
     wrapWithDirectory: true,
     rawLeaves: true,
-    hasher: sha256,
   })) {
     rootCid = entry.cid;
   }
