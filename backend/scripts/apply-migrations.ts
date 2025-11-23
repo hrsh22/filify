@@ -86,13 +86,20 @@ async function applyMigrations() {
     console.log('✓ Connected to local SQLite database');
   }
 
-  // Migration files in order
-  const migrations = [
-    '0000_wooden_kree.sql',
-    '0001_ambitious_mister_sinister.sql',
-    '0002_wallet_owned_ens.sql',
-    '0003_backend_car.sql',
-  ];
+  // Automatically discover migration files in order
+  const migrationsDir = path.join(process.cwd(), 'drizzle', 'migrations');
+  const allFiles = fs.readdirSync(migrationsDir);
+  const migrationFiles = allFiles
+    .filter((file) => file.endsWith('.sql') && !file.startsWith('.'))
+    .sort(); // Sort alphabetically to ensure correct order
+
+  if (migrationFiles.length === 0) {
+    console.log('⚠️  No migration files found');
+    return;
+  }
+
+  console.log(`🔄 Found ${migrationFiles.length} migration(s) to apply...`);
+  console.log(`   ${migrationFiles.join(', ')}\n`);
 
   console.log('🔄 Applying migrations...');
 
@@ -107,7 +114,7 @@ async function applyMigrations() {
     `);
 
     // Apply each migration
-    for (const migrationFile of migrations) {
+    for (const migrationFile of migrationFiles) {
       const migrationPath = path.join(process.cwd(), 'drizzle', 'migrations', migrationFile);
 
       if (!fs.existsSync(migrationPath)) {
