@@ -21,14 +21,14 @@ export class AuthController {
           stack: err.stack,
           ip: req.ip,
         });
-        return res.redirect(`${env.FRONTEND_URL}/auth/error?message=${encodeURIComponent(err.message)}`);
+        return res.redirect(`${env.FRONTEND_URL}/#/auth/error?message=${encodeURIComponent(err.message)}`);
       }
 
       if (!user) {
         logger.warn('GitHub OAuth callback: user not found', {
           ip: req.ip,
         });
-        return res.redirect(`${env.FRONTEND_URL}/auth/error?message=Authentication failed`);
+        return res.redirect(`${env.FRONTEND_URL}/#/auth/error?message=Authentication failed`);
       }
 
       req.logIn(user, (loginErr) => {
@@ -38,7 +38,7 @@ export class AuthController {
             stack: loginErr.stack,
             userId: user.id,
           });
-          return res.redirect(`${env.FRONTEND_URL}/auth/error?message=${encodeURIComponent(loginErr.message)}`);
+          return res.redirect(`${env.FRONTEND_URL}/#/auth/error?message=${encodeURIComponent(loginErr.message)}`);
         }
 
         logger.info('User authenticated successfully', {
@@ -47,7 +47,7 @@ export class AuthController {
           ip: req.ip,
         });
         // Redirect to frontend with success
-        return res.redirect(`${env.FRONTEND_URL}/auth/success`);
+        return res.redirect(`${env.FRONTEND_URL}/#/auth/success`);
       });
     })(req, res);
   }
@@ -135,10 +135,10 @@ export class AuthController {
       authenticated,
       user: req.user
         ? {
-            id: req.user.id,
-            githubUsername: req.user.githubUsername,
-            avatarUrl: req.user.avatarUrl,
-          }
+          id: req.user.id,
+          githubUsername: req.user.githubUsername,
+          avatarUrl: req.user.avatarUrl,
+        }
         : null,
     });
   }
