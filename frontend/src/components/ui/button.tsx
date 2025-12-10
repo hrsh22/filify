@@ -5,7 +5,7 @@ import type { ButtonHTMLAttributes, forwardRef } from "react";
 import * as React from "react";
 
 export const buttonVariants = cva(
-    "inline-flex items-center justify-center gap-2 rounded-lg text-sm font-medium transition-smooth focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed ring-offset-background whitespace-nowrap",
+    "inline-flex items-center justify-center gap-2 rounded-lg text-sm font-medium transition-smooth cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed ring-offset-background whitespace-nowrap",
     {
         variants: {
             variant: {
