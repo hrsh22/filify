@@ -165,7 +165,7 @@ class BuildService {
                 // Install dependencies
                 logs += `Installing dependencies...\n`;
                 logger.info('Installing dependencies', { deploymentId, frontendWorkingDir });
-                const installResult = await this.runCommand('npm install --omit=dev', deploymentId, {
+                const installResult = await this.runCommand('npm install', deploymentId, {
                     cwd: frontendWorkingDir,
                 });
                 logs += installResult.stdout + installResult.stderr;
