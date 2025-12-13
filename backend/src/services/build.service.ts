@@ -112,7 +112,7 @@ class BuildService {
                 .catch(() => false);
 
             let packageJson: Record<string, any> | null = null;
-            let projectType: 'nextjs' | 'node' | 'static' = 'static';
+            let projectType: 'nextjs' | 'nuxt' | 'node' | 'static' = 'static';
             if (hasPackageJson) {
                 const parsed = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'));
                 packageJson = parsed && typeof parsed === 'object' ? parsed : null;
@@ -151,6 +151,16 @@ class BuildService {
                             `/** @type {import('next').NextConfig} */\nconst nextConfig = {\n  output: 'export',\n  trailingSlash: true,\n  images: {\n    unoptimized: true,\n  },\n}\n\nmodule.exports = nextConfig\n`
                         );
                         logs += `✓ Created next.config.js with static export settings\n\n`;
+                    }
+                } else {
+                    // Check for Nuxt
+                    const hasNuxtDep =
+                        typeof packageJson.dependencies?.nuxt === 'string' ||
+                        typeof packageJson.devDependencies?.nuxt === 'string';
+                    if (hasNuxtDep) {
+                        projectType = 'nuxt';
+                        logs += `Detected Nuxt 3 project\n`;
+                        logger.info('Detected Nuxt 3 project', { deploymentId, packageName });
                     }
                 }
             } else {
@@ -237,6 +247,7 @@ class BuildService {
             'dist', // Vite, Parcel
             'build', // CRA, Gatsby
             '.next', // Next.js
+            '.output/public', // Nuxt 3
             'public', // Some static sites
         ];
 
@@ -261,7 +272,7 @@ class BuildService {
         });
 
         throw new Error(
-            'Could not detect build output directory. Please ensure your project has a build script that outputs to: out, dist, build, or .next'
+            'Could not detect build output directory. Please ensure your project has a build script that outputs to: out, dist, build, .next, or .output/public'
         );
     }
 

@@ -52,6 +52,7 @@ export function useAutoDeployPoller(enabled = true) {
 
       const skipUpload = deployment.status === 'awaiting_signature'
       let cid = deployment.ipfsCid ?? null
+      let uploadSucceeded = skipUpload // If skipping upload, we assume previous upload succeeded
       let stage: 'download' | 'upload' | 'prepare' | 'sign' | 'confirm' | 'idle' = 'idle'
       console.log('[AutoDeployPoller] Starting processing', {
         deploymentId: deployment.id,
@@ -65,13 +66,28 @@ export function useAutoDeployPoller(enabled = true) {
           console.log('[AutoDeployPoller] Uploading backend CAR artifact to Filecoin', {
             deploymentId: deployment.id,
           })
-          cid = await uploadFile(deployment.id, {
-            deploymentId: deployment.id,
-            projectId: deployment.projectId,
-          })
+          try {
+            cid = await uploadFile(deployment.id, {
+              deploymentId: deployment.id,
+              projectId: deployment.projectId,
+            })
+            uploadSucceeded = true
+          } catch (uploadError) {
+            uploadSucceeded = false
+            // Mark deployment as failed and return early
+            const message = uploadError instanceof Error ? uploadError.message : 'Upload failed'
+            try {
+              await deploymentsService.markUploadFailed(deployment.id, message)
+            } catch (markError) {
+              console.error('[AutoDeployPoller] failed to mark deployment as failed', markError)
+            }
+            console.error('[AutoDeployPoller] Upload failed', uploadError)
+            return
+          }
         }
 
-        if (!cid) {
+        // Only proceed to ENS if upload succeeded (or was skipped because we already have a CID)
+        if (!uploadSucceeded || !cid) {
           throw new Error('Missing IPFS CID for ENS update')
         }
 

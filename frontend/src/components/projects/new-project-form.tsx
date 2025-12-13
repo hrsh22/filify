@@ -25,7 +25,7 @@ const schema = z
         repoName: z.string().min(1, "Repository is required"),
         repoUrl: z.string().url(),
         repoBranch: z.string().min(1, "Branch is required"),
-        framework: z.enum(["html", "nextjs", "vite"], { required_error: "Framework is required" }),
+        framework: z.enum(["html", "nextjs", "vite", "nuxt"], { required_error: "Framework is required" }),
         ensName: z.string().min(1, "ENS domain is required"),
         ensOwnerAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Wallet address is required"),
         buildCommand: z.string().optional(),
@@ -34,14 +34,14 @@ const schema = z
     })
     .refine(
         (data) => {
-            // Build config required only for Next.js
-            if (data.framework === "nextjs") {
+            // Build config required for Next.js and Nuxt
+            if (data.framework === "nextjs" || data.framework === "nuxt") {
                 return !!(data.buildCommand && data.outputDir);
             }
             return true;
         },
         {
-            message: "Build command and output directory are required for Next.js",
+            message: "Build command and output directory are required for Next.js and Nuxt",
             path: ["buildCommand"]
         }
     );
@@ -50,12 +50,13 @@ type FormValues = z.infer<typeof schema>;
 
 const ETH_MAINNET_RPC = DEFAULT_ETHEREUM_RPC;
 
-type Framework = "html" | "nextjs" | "vite";
+type Framework = "html" | "nextjs" | "vite" | "nuxt";
 
 const FRAMEWORKS: { value: Framework; label: string; status: "supported" | "coming-soon" }[] = [
     { value: "html", label: "HTML", status: "supported" },
     { value: "nextjs", label: "Next.js", status: "supported" },
-    { value: "vite", label: "Vite", status: "supported" }
+    { value: "vite", label: "Vite", status: "supported" },
+    { value: "nuxt", label: "Nuxt", status: "supported" }
 ];
 
 function formatAddress(address: string) {
@@ -208,6 +209,9 @@ export function NewProjectForm() {
         } else if (selectedFramework === "vite") {
             form.setValue("buildCommand", "npm run build");
             form.setValue("outputDir", "dist");
+        } else if (selectedFramework === "nuxt") {
+            form.setValue("buildCommand", "npm run generate");
+            form.setValue("outputDir", ".output/public");
         } else if (selectedFramework === "html") {
             // Clear build config for HTML
             form.setValue("buildCommand", undefined);
@@ -288,14 +292,16 @@ export function NewProjectForm() {
             </Card>
 
             {/* Build Configuration */}
-            {(selectedFramework === "nextjs" || selectedFramework === "vite") && (
+            {(selectedFramework === "nextjs" || selectedFramework === "vite" || selectedFramework === "nuxt") && (
                 <Card>
                     <CardHeader>
                         <CardTitle className="text-lg">Build Configuration</CardTitle>
                         <p className="text-sm text-muted-foreground">
                             {selectedFramework === "nextjs"
                                 ? "Customize how Filify builds and exports your Next.js project."
-                                : "Customize how Filify builds your Vite project."}
+                                : selectedFramework === "nuxt"
+                                  ? "Customize how Filify builds and generates your Nuxt 3 project."
+                                  : "Customize how Filify builds your Vite project."}
                         </p>
                     </CardHeader>
                     <CardContent>
@@ -309,7 +315,11 @@ export function NewProjectForm() {
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="outputDir">Output directory</Label>
-                                <Input id="outputDir" placeholder={selectedFramework === "nextjs" ? "out" : "dist"} {...form.register("outputDir")} />
+                                <Input
+                                    id="outputDir"
+                                    placeholder={selectedFramework === "nextjs" ? "out" : selectedFramework === "nuxt" ? ".output/public" : "dist"}
+                                    {...form.register("outputDir")}
+                                />
                                 {form.formState.errors.outputDir && (
                                     <p className="text-sm text-destructive font-medium">{form.formState.errors.outputDir.message}</p>
                                 )}
