@@ -209,7 +209,7 @@ export function DeploymentDetailPage() {
                             <CardTitle>Progress</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <DeploymentSteps status={deployment.status} />
+                            <DeploymentSteps status={deployment.status} hasEns={Boolean(project?.ensName)} />
                         </CardContent>
                     </Card>
 

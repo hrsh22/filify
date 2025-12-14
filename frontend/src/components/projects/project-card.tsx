@@ -124,25 +124,43 @@ export function ProjectCard({ project, onChange }: ProjectCardProps) {
 
                 <CardContent className="space-y-4">
                     <div className="grid gap-3 sm:grid-cols-2">
-                        {/* ENS Domain */}
+                        {/* ENS Domain or IPFS */}
                         <div className="space-y-2 rounded-lg bg-secondary/50 p-3 border">
                             <div className="flex items-center gap-2 text-muted-foreground">
                                 <Globe className="h-3.5 w-3.5" />
-                                <p className="text-xs font-medium">ENS Domain</p>
+                                <p className="text-xs font-medium">{project.ensName ? 'ENS Domain' : 'Deployment'}</p>
                             </div>
                             <div className="flex items-center justify-between gap-2">
-                                <p className="text-sm font-semibold text-primary truncate">{project.ensName}</p>
-                                {latestDeployment?.status === 'success' && (
-                                    <a
-                                        href={project.network === 'sepolia'
-                                            ? `https://${project.ensName}.s.raffy.eth.limo`
-                                            : `https://${project.ensName}.limo`}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline underline-offset-2 shrink-0">
-                                        Visit
-                                        <ExternalLink className="h-3 w-3" />
-                                    </a>
+                                {project.ensName ? (
+                                    <>
+                                        <p className="text-sm font-semibold text-primary truncate">{project.ensName}</p>
+                                        {latestDeployment?.status === 'success' && (
+                                            <a
+                                                href={project.network === 'sepolia'
+                                                    ? `https://${project.ensName}.s.raffy.eth.limo`
+                                                    : `https://${project.ensName}.limo`}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="inline-flex items-center gap-1 text-xs text-primary hover:underline underline-offset-2 shrink-0">
+                                                Visit
+                                                <ExternalLink className="h-3 w-3" />
+                                            </a>
+                                        )}
+                                    </>
+                                ) : (
+                                    <>
+                                        <Badge variant="outline" className="text-xs">IPFS Only</Badge>
+                                        {latestDeployment?.status === 'success' && latestDeployment.ipfsCid && (
+                                            <a
+                                                href={`https://${latestDeployment.ipfsCid}.ipfs.dweb.link`}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="inline-flex items-center gap-1 text-xs text-primary hover:underline underline-offset-2 shrink-0">
+                                                Visit IPFS
+                                                <ExternalLink className="h-3 w-3" />
+                                            </a>
+                                        )}
+                                    </>
                                 )}
                             </div>
                         </div>

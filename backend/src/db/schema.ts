@@ -21,9 +21,9 @@ export const projects = sqliteTable('projects', {
   repoBranch: text('repo_branch').notNull().default('main'),
   autoDeployBranch: text('auto_deploy_branch').notNull().default('main'),
   network: text('network').notNull().default('mainnet'), // 'mainnet' | 'sepolia'
-  ensName: text('ens_name').notNull(),
-  ensOwnerAddress: text('ens_owner_address').notNull(),
-  ethereumRpcUrl: text('ethereum_rpc_url').notNull(),
+  ensName: text('ens_name'), // Optional - null means IPFS-only deployment
+  ensOwnerAddress: text('ens_owner_address'), // Required if ensName is set
+  ethereumRpcUrl: text('ethereum_rpc_url'), // Required if ensName is set
   buildCommand: text('build_command'),
   outputDir: text('output_dir'),
   frontendDir: text('frontend_dir'),

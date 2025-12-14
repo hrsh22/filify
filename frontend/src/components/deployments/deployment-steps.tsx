@@ -1,7 +1,7 @@
 import { Check, Loader2, GitBranch, Hammer, Upload, Globe, CheckCircle, XCircle, AlertCircle, Clock } from 'lucide-react'
 import type { DeploymentStatus } from '@/types'
 
-const order: DeploymentStatus[] = [
+const ALL_STEPS: DeploymentStatus[] = [
   'pending_build',
   'cloning',
   'building',
@@ -12,10 +12,23 @@ const order: DeploymentStatus[] = [
   'success',
 ]
 
-function getStepState(current: DeploymentStatus, step: DeploymentStatus) {
-  const currentIndex = order.indexOf(current)
-  const stepIndex = order.indexOf(step)
-  const normalizedCurrent = currentIndex === -1 ? order.length : currentIndex
+// Steps for IPFS-only deployments (no ENS)
+const IPFS_ONLY_STEPS: DeploymentStatus[] = [
+  'pending_build',
+  'cloning',
+  'building',
+  'pending_upload',
+  'uploading',
+  'success',
+]
+
+function getStepState(current: DeploymentStatus, step: DeploymentStatus, steps: DeploymentStatus[]) {
+  const currentIndex = steps.indexOf(current)
+  const stepIndex = steps.indexOf(step)
+
+  // For IPFS-only: if current is 'success' and step is in our list, it's complete
+  const normalizedCurrent = currentIndex === -1 ? steps.length : currentIndex
+
   if (normalizedCurrent > stepIndex) return 'complete'
   if (normalizedCurrent === stepIndex) {
     if (current === 'success') {
@@ -50,24 +63,31 @@ const stepIcons: Record<string, React.ComponentType<{ className?: string }>> = {
   success: CheckCircle,
 }
 
-export function DeploymentSteps({ status }: { status: DeploymentStatus }) {
-  const steps = status === 'failed' || status === 'cancelled' ? order.slice(0, 4) : order
+interface DeploymentStepsProps {
+  status: DeploymentStatus
+  hasEns?: boolean
+}
+
+export function DeploymentSteps({ status, hasEns = true }: DeploymentStepsProps) {
+  // Choose steps based on whether ENS is enabled
+  const baseSteps = hasEns ? ALL_STEPS : IPFS_ONLY_STEPS
+  const steps = status === 'failed' || status === 'cancelled' ? baseSteps.slice(0, 4) : baseSteps
+
   return (
     <ol className="space-y-4">
       {steps.map((step, index) => {
-        const state = getStepState(status, step)
+        const state = getStepState(status, step, baseSteps)
         const Icon = stepIcons[step]
         return (
           <li key={step} className="flex items-start gap-4">
             <div className="relative flex-shrink-0">
               <div
-                className={`flex h-10 w-10 items-center justify-center rounded-full border-2 font-semibold text-sm transition-smooth ${
-                  state === 'complete'
+                className={`flex h-10 w-10 items-center justify-center rounded-full border-2 font-semibold text-sm transition-smooth ${state === 'complete'
                     ? 'bg-success border-success text-success-foreground'
                     : state === 'active'
                       ? 'bg-primary border-primary text-primary-foreground animate-pulse-slow'
                       : 'bg-background border-border text-muted-foreground'
-                }`}
+                  }`}
               >
                 {state === 'complete' ? (
                   <Check className="h-5 w-5" />
@@ -80,15 +100,13 @@ export function DeploymentSteps({ status }: { status: DeploymentStatus }) {
                 )}
               </div>
               {index < steps.length - 1 && (
-                <div className={`absolute left-1/2 top-10 h-4 w-0.5 -translate-x-1/2 ${
-                  state === 'complete' ? 'bg-success' : 'bg-border'
-                }`} />
+                <div className={`absolute left-1/2 top-10 h-4 w-0.5 -translate-x-1/2 ${state === 'complete' ? 'bg-success' : 'bg-border'
+                  }`} />
               )}
             </div>
             <div className="flex-1 pt-1.5">
-              <p className={`font-semibold text-sm ${
-                state === 'active' ? 'text-primary' : state === 'complete' ? 'text-foreground' : 'text-muted-foreground'
-              }`}>
+              <p className={`font-semibold text-sm ${state === 'active' ? 'text-primary' : state === 'complete' ? 'text-foreground' : 'text-muted-foreground'
+                }`}>
                 {labelMap[step]}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">

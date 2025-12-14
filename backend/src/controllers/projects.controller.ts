@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { db } from '../db';
 import { projects } from '../db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, ne } from 'drizzle-orm';
 import { generateId } from '../utils/generateId';
 import { githubService } from '../services/github.service';
 import { logger } from '../utils/logger';
@@ -117,8 +117,10 @@ export class ProjectsController {
       frontendDir,
     } = req.body;
 
-    const normalizedOwnerAddress = ensOwnerAddress.toLowerCase();
+    // Only normalize if ENS owner address is provided
+    const normalizedOwnerAddress = ensOwnerAddress ? ensOwnerAddress.toLowerCase() : null;
     const networkConfig = getNetworkConfig(network as NetworkType);
+    const hasEns = Boolean(ensName && ensOwnerAddress);
 
     logger.info('Creating new project', {
       userId,
@@ -126,8 +128,9 @@ export class ProjectsController {
       repoName,
       repoBranch: repoBranch || 'main',
       network,
-      ensName,
-      ensOwnerAddress: normalizedOwnerAddress,
+      ensName: ensName || '(none)',
+      ensOwnerAddress: normalizedOwnerAddress || '(none)',
+      hasEns,
     });
 
     try {
@@ -166,9 +169,9 @@ export class ProjectsController {
           repoBranch: selectedBranch,
           autoDeployBranch: selectedBranch,
           network: network as NetworkType,
-          ensName,
+          ensName: ensName || null,
           ensOwnerAddress: normalizedOwnerAddress,
-          ethereumRpcUrl: ethereumRpcUrl || networkConfig.rpcUrl,
+          ethereumRpcUrl: hasEns ? (ethereumRpcUrl || networkConfig.rpcUrl) : null,
           buildCommand: buildCommand || null,
           outputDir: outputDir || null,
           frontendDir: frontendDir || null,
@@ -448,10 +451,234 @@ export class ProjectsController {
       });
     }
   }
+
+  // Attach ENS domain to an existing project
+  async attachEns(req: Request, res: Response) {
+    const { id } = req.params;
+    const { ensName, ensOwnerAddress, force } = req.body;
+    const userId = (req.user as any).id;
+
+    logger.info('Attaching ENS to project', { projectId: id, ensName, userId, force });
+
+    try {
+      // Validate inputs
+      if (!ensName || !/^[a-z0-9-]+\.eth$/.test(ensName)) {
+        return res.status(400).json({ error: 'Invalid ENS name format' });
+      }
+      if (!ensOwnerAddress || !/^0x[a-fA-F0-9]{40}$/.test(ensOwnerAddress)) {
+        return res.status(400).json({ error: 'Invalid Ethereum address' });
+      }
+
+      const normalizedAddress = ensOwnerAddress.toLowerCase();
+
+      // Check if ENS is already linked to another project
+      const existingProject = await db.query.projects.findFirst({
+        where: and(eq(projects.ensName, ensName), ne(projects.id, id)),
+      });
+
+      if (existingProject) {
+        if (!force) {
+          return res.status(409).json({
+            error: 'ENS_ALREADY_LINKED',
+            message: `This domain is already linked to project "${existingProject.name}"`,
+            existingProjectName: existingProject.name
+          });
+        }
+
+        // Force unlink from other project
+        await db
+          .update(projects)
+          .set({
+            ensName: null,
+            ensOwnerAddress: null,
+            ethereumRpcUrl: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(projects.id, existingProject.id));
+
+        logger.info('Force unlinked ENS from other project', {
+          ensName,
+          fromProjectId: existingProject.id,
+          toProjectId: id
+        });
+      }
+
+      // Find project with latest successful deployment
+      const project = await db.query.projects.findFirst({
+        where: and(eq(projects.id, id), eq(projects.userId, userId)),
+        with: {
+          deployments: {
+            limit: 1,
+            orderBy: (deployments: any, { desc }: any) => [desc(deployments.createdAt)],
+          },
+        },
+      });
+
+      if (!project) {
+        return res.status(404).json({ error: 'Project not found' });
+      }
+
+      const networkConfig = getNetworkConfig(project.network as NetworkType);
+
+      // Update project with ENS details
+      await db
+        .update(projects)
+        .set({
+          ensName,
+          ensOwnerAddress: normalizedAddress,
+          ethereumRpcUrl: networkConfig.rpcUrl,
+          updatedAt: new Date(),
+        })
+        .where(eq(projects.id, id));
+
+      // Check if there's a successful deployment with IPFS CID
+      const latestDeployment = project.deployments?.[0];
+      const hasSuccessfulDeployment = latestDeployment?.status === 'success' && latestDeployment?.ipfsCid;
+
+      if (hasSuccessfulDeployment) {
+        // Import ensService dynamically to avoid circular deps
+        const { ensService } = await import('../services/ens.service');
+
+        const payload = await ensService.prepareContenthashTx(
+          ensName,
+          normalizedAddress,
+          latestDeployment.ipfsCid!,
+          networkConfig.rpcUrl
+        );
+
+        logger.info('ENS transaction prepared for existing deployment', {
+          projectId: id,
+          ensName,
+          ipfsCid: latestDeployment.ipfsCid,
+        });
+
+        return res.json({
+          needsSignature: true,
+          deploymentId: latestDeployment.id,
+          ipfsCid: latestDeployment.ipfsCid,
+          payload,
+        });
+      }
+
+      // No deployment yet, just save ENS config
+      logger.info('ENS attached without signature (no deployment yet)', { projectId: id, ensName });
+      return res.json({ needsSignature: false });
+    } catch (error) {
+      logger.error('Failed to attach ENS:', {
+        error: error instanceof Error ? error.message : String(error),
+        projectId: id,
+        userId,
+      });
+      res.status(500).json({ error: 'Failed to attach ENS domain' });
+    }
+  }
+
+  // Confirm ENS attachment after wallet signature
+  async confirmEnsAttach(req: Request, res: Response) {
+    const { id } = req.params;
+    const { txHash, ipfsCid } = req.body;
+    const userId = (req.user as any).id;
+
+    logger.info('Confirming ENS attachment', { projectId: id, txHash, userId });
+
+    try {
+      if (!txHash || !/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
+        return res.status(400).json({ error: 'Invalid transaction hash' });
+      }
+
+      const project = await db.query.projects.findFirst({
+        where: and(eq(projects.id, id), eq(projects.userId, userId)),
+      });
+
+      if (!project) {
+        return res.status(404).json({ error: 'Project not found' });
+      }
+
+      if (!project.ensName || !project.ethereumRpcUrl) {
+        return res.status(400).json({ error: 'No ENS configuration found for this project' });
+      }
+
+      const { ensService } = await import('../services/ens.service');
+
+      const result = await ensService.waitForTransaction({
+        ensName: project.ensName,
+        txHash,
+        expectedCid: ipfsCid,
+        rpcUrl: project.ethereumRpcUrl,
+      });
+
+      logger.info('ENS attachment confirmed', {
+        projectId: id,
+        txHash: result.txHash,
+        verified: result.verified,
+      });
+
+      return res.json({
+        status: 'success',
+        txHash: result.txHash,
+        verified: result.verified,
+        blockNumber: result.blockNumber,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to confirm ENS transaction';
+      logger.error('ENS attachment confirmation failed:', {
+        error: message,
+        projectId: id,
+        userId,
+      });
+
+      // Rollback ENS on failure
+      await db
+        .update(projects)
+        .set({
+          ensName: null,
+          ensOwnerAddress: null,
+          ethereumRpcUrl: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(projects.id, id));
+
+      res.status(500).json({ error: message });
+    }
+  }
+
+  // Remove ENS from project
+  async removeEns(req: Request, res: Response) {
+    const { id } = req.params;
+    const userId = (req.user as any).id;
+
+    logger.info('Removing ENS from project', { projectId: id, userId });
+
+    try {
+      const project = await db.query.projects.findFirst({
+        where: and(eq(projects.id, id), eq(projects.userId, userId)),
+      });
+
+      if (!project) {
+        return res.status(404).json({ error: 'Project not found' });
+      }
+
+      await db
+        .update(projects)
+        .set({
+          ensName: null,
+          ensOwnerAddress: null,
+          ethereumRpcUrl: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(projects.id, id));
+
+      logger.info('ENS removed from project', { projectId: id });
+      return res.json({ success: true });
+    } catch (error) {
+      logger.error('Failed to remove ENS:', {
+        error: error instanceof Error ? error.message : String(error),
+        projectId: id,
+        userId,
+      });
+      res.status(500).json({ error: 'Failed to remove ENS domain' });
+    }
+  }
 }
 
 export const projectsController = new ProjectsController();
-
-
-
-

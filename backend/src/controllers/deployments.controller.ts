@@ -911,19 +911,40 @@ export class DeploymentsController {
                 transactionHash: uploadResult.transactionHash,
             });
 
-            // Update deployment with upload results and transition to awaiting_signature
-            await db
-                .update(deployments)
-                .set({
-                    status: 'awaiting_signature',
-                    ipfsCid: uploadResult.rootCid,
-                })
-                .where(eq(deployments.id, deploymentId));
+            // Check if project has ENS configured
+            const hasEns = Boolean(project.ensName && project.ensOwnerAddress);
 
-            logger.info('Deployment ready for ENS signature', {
-                deploymentId,
-                ipfsCid: uploadResult.rootCid,
-            });
+            if (hasEns) {
+                // ENS configured - transition to awaiting_signature
+                await db
+                    .update(deployments)
+                    .set({
+                        status: 'awaiting_signature',
+                        ipfsCid: uploadResult.rootCid,
+                    })
+                    .where(eq(deployments.id, deploymentId));
+
+                logger.info('Deployment ready for ENS signature', {
+                    deploymentId,
+                    ipfsCid: uploadResult.rootCid,
+                    ensName: project.ensName,
+                });
+            } else {
+                // No ENS configured - mark as success immediately
+                await db
+                    .update(deployments)
+                    .set({
+                        status: 'success',
+                        ipfsCid: uploadResult.rootCid,
+                        completedAt: new Date(),
+                    })
+                    .where(eq(deployments.id, deploymentId));
+
+                logger.info('Deployment completed (IPFS-only, no ENS)', {
+                    deploymentId,
+                    ipfsCid: uploadResult.rootCid,
+                });
+            }
 
             // Cleanup build directory after successful upload if enabled
             if (env.CLEANUP_BUILDS_ON_COMPLETE) {

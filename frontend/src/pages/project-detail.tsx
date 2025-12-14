@@ -18,6 +18,13 @@ import { repositoriesService } from "@/services/repositories.service";
 import { useToast } from "@/context/toast-context";
 import { DeploymentStatusBadge } from "@/components/deployments/deployment-status-badge";
 import { useAutoDeployPoller } from "@/hooks/use-auto-deploy-poller";
+import { useAppKitAccount } from "@reown/appkit/react";
+import { useWalletClient, usePublicClient } from "wagmi";
+import { useEnsDomains } from "@/hooks/use-ens-domains";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Combobox } from "@/components/ui/combobox";
+import { Loader2 } from "lucide-react";
 
 const ACTIVE_STATUSES = new Set([
     "pending_build",
@@ -42,6 +49,99 @@ export function ProjectDetailPage() {
     const [webhookUpdating, setWebhookUpdating] = useState(false);
     const [selectedBranch, setSelectedBranch] = useState("main");
     useAutoDeployPoller(true);
+
+    // ENS Management State
+    const { address, isConnected } = useAppKitAccount();
+    const { data: walletClient } = useWalletClient();
+    const publicClient = usePublicClient();
+    const { domains: ensDomains, loading: ensLoading, refresh: refreshEns } = useEnsDomains(isConnected ? address : null);
+
+    const [isAttachEnsOpen, setIsAttachEnsOpen] = useState(false);
+    const [selectedEnsName, setSelectedEnsName] = useState("");
+    const [ensAttachStatus, setEnsAttachStatus] = useState<"idle" | "attaching" | "signing" | "confirming">("idle");
+    const [isRemoveEnsOpen, setIsRemoveEnsOpen] = useState(false);
+    const [ensRemoveLoading, setEnsRemoveLoading] = useState(false);
+
+    // Conflict handling
+    const [isConflictDialogOpen, setIsConflictDialogOpen] = useState(false);
+    const [conflictProjectName, setConflictProjectName] = useState("");
+
+    const ensOptions = useMemo(() =>
+        ensDomains.map(d => ({ value: d.name, label: d.name })),
+        [ensDomains]);
+
+    const handleAttachEnsSubmit = async (force = false) => {
+        if (!project || !selectedEnsName || !address || !publicClient || !walletClient) return;
+
+        try {
+            if (!force) {
+                setEnsAttachStatus("attaching");
+            } else {
+                // If forcing, keep loading state from conflict dialog
+                setIsConflictDialogOpen(false);
+            }
+
+            // 1. Call backend to attach ENS and check if signature needed
+            const result = await projectsService.attachEns(project.id, selectedEnsName, address, force);
+
+            if (result.needsSignature && result.payload) {
+                setEnsAttachStatus("signing");
+
+                // 2. Request signature from wallet
+                const txHash = await walletClient.sendTransaction({
+                    to: result.payload.resolverAddress as `0x${string}`,
+                    data: result.payload.data as `0x${string}`,
+                    account: address as `0x${string}`,
+                    chain: { id: result.payload.chainId } as any
+                });
+
+                setEnsAttachStatus("confirming");
+                showToast("Transaction broadcasted! Waiting for confirmation...", "info");
+
+                // 3. Confirm with backend
+                await projectsService.confirmEnsAttach(project.id, txHash, result.ipfsCid!);
+
+                showToast("ENS domain successfully linked!", "success");
+            } else {
+                showToast("ENS domain linked (will update on next deploy)", "success");
+            }
+
+            setIsAttachEnsOpen(false);
+            setSelectedEnsName("");
+            await refresh();
+        } catch (error: any) {
+            console.error("[ProjectDetail][attachEns]", error);
+
+            // Check for conflict error
+            if (error?.response?.data?.error === 'ENS_ALREADY_LINKED') {
+                setConflictProjectName(error.response.data.existingProjectName);
+                setIsConflictDialogOpen(true);
+                return;
+            }
+
+            showToast("Failed to link ENS domain", "error");
+        } finally {
+            if (!isConflictDialogOpen) {
+                setEnsAttachStatus("idle");
+            }
+        }
+    };
+
+    const handleRemoveEns = async () => {
+        if (!project) return;
+        try {
+            setEnsRemoveLoading(true);
+            await projectsService.removeEns(project.id);
+            showToast("ENS domain removed", "success");
+            setIsRemoveEnsOpen(false);
+            await refresh();
+        } catch (error) {
+            console.error("[ProjectDetail][removeEns]", error);
+            showToast("Failed to remove ENS domain", "error");
+        } finally {
+            setEnsRemoveLoading(false);
+        }
+    };
 
     const latestDeployment = project?.deployments?.[0];
     const projectBusy = useMemo(() => Boolean(latestDeployment && ACTIVE_STATUSES.has(latestDeployment.status)), [latestDeployment]);
@@ -210,8 +310,40 @@ export function ProjectDetailPage() {
                                     ENS Domain
                                 </CardDescription>
                             </CardHeader>
-                            <CardContent>
-                                <p className="text-lg font-semibold text-primary">{project.ensName}</p>
+                            <CardContent className="space-y-2">
+                                {project.ensName ? (
+                                    <>
+                                        <p className="text-lg font-semibold text-primary truncate">{project.ensName}</p>
+                                        <div className="flex gap-2">
+                                            <a
+                                                href={project.network === 'sepolia'
+                                                    ? `https://${project.ensName}.s.raffy.eth.limo`
+                                                    : `https://${project.ensName}.limo`}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="text-xs text-muted-foreground hover:text-foreground hover:underline underline-offset-2 flex items-center gap-1">
+                                                Visit <ExternalLink className="h-3 w-3" />
+                                            </a>
+                                            <button
+                                                onClick={() => setIsRemoveEnsOpen(true)}
+                                                className="text-xs text-destructive hover:underline underline-offset-2">
+                                                Remove
+                                            </button>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <p className="text-sm text-muted-foreground">No ENS domain linked</p>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="w-full mt-1"
+                                            onClick={() => setIsAttachEnsOpen(true)}
+                                        >
+                                            Add ENS Domain
+                                        </Button>
+                                    </>
+                                )}
                             </CardContent>
                         </Card>
                         <Card>
@@ -318,10 +450,10 @@ export function ProjectDetailPage() {
 
                 <TabsContent value="settings" className="space-y-4">
                     <Card>
-                    <CardHeader>
-                        <CardTitle>Webhook Settings</CardTitle>
-                        <CardDescription>Enable GitHub webhooks to trigger deployments whenever you push to the selected branch.</CardDescription>
-                    </CardHeader>
+                        <CardHeader>
+                            <CardTitle>Webhook Settings</CardTitle>
+                            <CardDescription>Enable GitHub webhooks to trigger deployments whenever you push to the selected branch.</CardDescription>
+                        </CardHeader>
                         <CardContent className="space-y-6">
                             <div className="flex flex-wrap items-center justify-between gap-4">
                                 <div className="space-y-2">
@@ -371,6 +503,120 @@ export function ProjectDetailPage() {
                     </Card>
                 </TabsContent>
             </Tabs>
+            {/* Attach ENS Dialog */}
+            <Dialog open={isAttachEnsOpen} onOpenChange={setIsAttachEnsOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Link ENS Domain</DialogTitle>
+                        <DialogDescription>
+                            Select an ENS domain owned by your wallet to link to this project.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium">Domain</span>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => void refreshEns()}
+                                    disabled={ensLoading}
+                                    className="h-auto p-0 text-xs text-muted-foreground hover:text-foreground"
+                                >
+                                    {ensLoading ? "Refreshing..." : "Refresh list"}
+                                </Button>
+                            </div>
+                            <Combobox
+                                options={ensOptions}
+                                value={selectedEnsName}
+                                onValueChange={setSelectedEnsName}
+                                placeholder="Select domain..."
+                                disabled={ensAttachStatus !== "idle"}
+                                emptyMessage={isConnected ? "No domains found" : "Connect wallet first"}
+                            />
+                            {!isConnected && (
+                                <p className="text-xs text-destructive">Please connect your wallet to view domains.</p>
+                            )}
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsAttachEnsOpen(false)}
+                            disabled={ensAttachStatus !== "idle"}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={() => handleAttachEnsSubmit(false)}
+                            disabled={!selectedEnsName || ensAttachStatus !== "idle"}
+                        >
+                            {ensAttachStatus === "attaching" && "Preparing..."}
+                            {ensAttachStatus === "signing" && "Waiting for signature..."}
+                            {ensAttachStatus === "confirming" && "Confirming..."}
+                            {ensAttachStatus === "idle" && "Link Domain"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Remove ENS Alert Dialog */}
+            <AlertDialog open={isRemoveEnsOpen} onOpenChange={setIsRemoveEnsOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Remove ENS Domain?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will unlink <strong>{project.ensName}</strong> from this project.
+                            <br /><br />
+                            Future deployments will effectively be IPFS-only and won't update this ENS domain.
+                            Existing deployments on ENS will remain pointing to the last updated content until changed elsewhere.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={ensRemoveLoading}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={(e) => {
+                                e.preventDefault();
+                                handleRemoveEns();
+                            }}
+                            disabled={ensRemoveLoading}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            {ensRemoveLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                            {ensRemoveLoading ? "Removing..." : "Remove"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+            {/* Conflict Alert Dialog */}
+            <AlertDialog open={isConflictDialogOpen} onOpenChange={setIsConflictDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Domain Already Linked</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            The domain <strong>{selectedEnsName}</strong> is currently linked to the project <strong>{conflictProjectName}</strong>.
+                            <br /><br />
+                            Do you want to unlink it from there and link it to this project instead?
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => {
+                            setIsConflictDialogOpen(false);
+                            setEnsAttachStatus("idle");
+                        }}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={(e) => {
+                                e.preventDefault();
+                                handleAttachEnsSubmit(true);
+                            }}
+                        >
+                            Confirm & Link
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

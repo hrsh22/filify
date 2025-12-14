@@ -7,13 +7,20 @@ export const createProjectSchema = z.object({
         repoUrl: z.string().url(),
         repoBranch: z.string().optional().default('main'),
         network: z.enum(['mainnet', 'sepolia']).default('mainnet'),
-        ensName: z.string().regex(/^[a-z0-9-]+\.eth$/, 'Invalid ENS name format'),
-        ensOwnerAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/, 'Invalid Ethereum address'),
-        ethereumRpcUrl: z.string().url().optional(), // Backend will use env.DEFAULT_ETHEREUM_RPC if not provided
+        ensName: z.string().regex(/^[a-z0-9-]+\.eth$/, 'Invalid ENS name format').optional().nullable(),
+        ensOwnerAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/, 'Invalid Ethereum address').optional().nullable(),
+        ethereumRpcUrl: z.string().url().optional().nullable(),
         buildCommand: z.string().optional(),
         outputDir: z.string().optional(),
         frontendDir: z.string().min(1).optional(),
-    }),
+    }).refine(
+        (data) => {
+            // If ensName is provided, ensOwnerAddress must also be provided
+            if (data.ensName && !data.ensOwnerAddress) return false;
+            return true;
+        },
+        { message: 'ENS owner address is required when ENS name is provided' }
+    ),
 });
 
 export const updateProjectSchema = z.object({

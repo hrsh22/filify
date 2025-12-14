@@ -11,9 +11,9 @@ export interface Project {
   repoBranch: string
   autoDeployBranch: string
   network: Network
-  ensName: string
-  ensOwnerAddress: string
-  ethereumRpcUrl: string
+  ensName?: string | null
+  ensOwnerAddress?: string | null
+  ethereumRpcUrl?: string | null
   buildCommand?: string | null
   outputDir?: string | null
   frontendDir?: string | null

@@ -38,6 +38,25 @@ router.post(
   (req, res) => projectsController.disableWebhook(req, res)
 );
 
+// ENS Management Routes
+router.post(
+  '/:id/ens/attach',
+  isAuthenticated,
+  (req, res) => projectsController.attachEns(req, res)
+);
+
+router.post(
+  '/:id/ens/confirm',
+  isAuthenticated,
+  (req, res) => projectsController.confirmEnsAttach(req, res)
+);
+
+router.delete(
+  '/:id/ens',
+  isAuthenticated,
+  (req, res) => projectsController.removeEns(req, res)
+);
+
 export default router;
 
 

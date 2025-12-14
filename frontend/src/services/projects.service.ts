@@ -8,8 +8,8 @@ type CreateProjectPayload = {
   repoUrl: string
   repoBranch: string
   network: Network
-  ensName: string
-  ensOwnerAddress: string
+  ensName?: string
+  ensOwnerAddress?: string
   ethereumRpcUrl?: string
   buildCommand?: string
   outputDir?: string
@@ -49,5 +49,27 @@ export const projectsService = {
   async disableWebhook(id: string) {
     const { data } = await api.post<{ webhookEnabled: boolean }>(`/projects/${id}/webhook/disable`)
     return data
+  },
+  async attachEns(id: string, ensName: string, ensOwnerAddress: string, force = false) {
+    const { data } = await api.post<{
+      needsSignature: boolean;
+      deploymentId?: string;
+      ipfsCid?: string;
+      payload?: any;
+    }>(`/projects/${id}/ens/attach`, { ensName, ensOwnerAddress, force });
+    return data;
+  },
+  async confirmEnsAttach(id: string, txHash: string, ipfsCid: string) {
+    const { data } = await api.post<{
+      status: string;
+      txHash: string;
+      verified: boolean;
+      blockNumber: number;
+    }>(`/projects/${id}/ens/confirm`, { txHash, ipfsCid });
+    return data;
+  },
+  async removeEns(id: string) {
+    const { data } = await api.delete<{ success: boolean }>(`/projects/${id}/ens`);
+    return data;
   },
 }

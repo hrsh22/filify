@@ -18,6 +18,7 @@ import { useToast } from "@/context/toast-context";
 import { useNetwork } from "@/context/network-context";
 import { useNavigate } from "react-router-dom";
 import { projectsService } from "@/services/projects.service";
+import { deploymentsService } from "@/services/deployments.service";
 import { useRepositories, useBranches } from "@/hooks/use-repositories";
 import { useEnsDomains } from "@/hooks/use-ens-domains";
 
@@ -28,12 +29,38 @@ const schema = z
         repoUrl: z.string().url(),
         repoBranch: z.string().min(1, "Branch is required"),
         framework: z.enum(["html", "nextjs", "vite", "nuxt"], { required_error: "Framework is required" }),
-        ensName: z.string().min(1, "ENS domain is required"),
-        ensOwnerAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Wallet address is required"),
+        enableEns: z.boolean().default(false),
+        ensName: z.string().optional(),
+        ensOwnerAddress: z.string().optional(),
         buildCommand: z.string().optional(),
         outputDir: z.string().optional(),
         frontendDir: z.string().optional()
     })
+    .refine(
+        (data) => {
+            // If ENS is enabled, ensName and ensOwnerAddress are required
+            if (data.enableEns) {
+                return !!data.ensName && /^[a-z0-9-]+\.eth$/.test(data.ensName);
+            }
+            return true;
+        },
+        {
+            message: "Valid ENS domain (.eth) is required when ENS is enabled",
+            path: ["ensName"]
+        }
+    )
+    .refine(
+        (data) => {
+            if (data.enableEns) {
+                return !!data.ensOwnerAddress && /^0x[a-fA-F0-9]{40}$/.test(data.ensOwnerAddress);
+            }
+            return true;
+        },
+        {
+            message: "Wallet address is required when ENS is enabled",
+            path: ["ensOwnerAddress"]
+        }
+    )
     .refine(
         (data) => {
             // Build config required for Next.js and Nuxt
@@ -176,10 +203,12 @@ export function NewProjectForm() {
     }, [branches, selectedRepo, form]);
 
     const selectedFramework = form.watch("framework");
+    const enableEns = form.watch("enableEns");
     const selectedEnsName = form.watch("ensName");
     const isWalletReady = Boolean(walletAddress);
     const walletDisplayName = walletEnsName || (walletAddress ? formatAddress(walletAddress) : null);
-    const canSubmit = Boolean(selectedRepo && selectedEnsName && isWalletReady);
+    // Can submit if repo selected AND (ENS disabled OR (ENS enabled AND domain selected AND wallet ready))
+    const canSubmit = Boolean(selectedRepo && (!enableEns || (selectedEnsName && isWalletReady)));
 
     useEffect(() => {
         if (walletAddress) {
@@ -222,23 +251,27 @@ export function NewProjectForm() {
 
     const onSubmit = async (values: FormValues) => {
         try {
-            await projectsService.create({
+            const project = await projectsService.create({
                 name: values.name,
                 repoName: values.repoName,
                 repoUrl: values.repoUrl,
                 repoBranch: values.repoBranch,
                 network,
-                ensName: values.ensName,
-                ensOwnerAddress: values.ensOwnerAddress,
+                ensName: values.enableEns ? values.ensName : undefined,
+                ensOwnerAddress: values.enableEns ? values.ensOwnerAddress : undefined,
                 buildCommand: values.buildCommand || undefined,
                 outputDir: values.outputDir || undefined,
                 frontendDir: values.frontendDir || undefined
             });
-            showToast("Project created!", "success");
-            navigate("/dashboard");
+
+            // Start deployment immediately
+            const { deploymentId } = await deploymentsService.create(project.id);
+
+            showToast("Project created and deployment started!", "success");
+            navigate(`/deployments/${deploymentId}`);
         } catch (error) {
             console.error("[NewProjectForm]", error);
-            // Silently fail - no error toast
+            showToast("Failed to create project", "error");
         }
     };
 
@@ -586,54 +619,99 @@ export function NewProjectForm() {
 
             <Card>
                 <CardHeader>
-                    <div className="flex items-start justify-between">
-                        <div className="space-y-1">
-                            <CardTitle className="text-lg">ENS Domain</CardTitle>
-                            <p className="text-sm text-muted-foreground">
-                                Select a domain owned by your connected wallet{walletDisplayName ? ` (${walletDisplayName})` : ""}
-                            </p>
-                        </div>
-                        <Button type="button" variant="outline" size="sm" onClick={() => void refreshEns()} disabled={!isWalletReady || ensLoading}>
-                            {ensLoading ? "Refreshing…" : "Refresh"}
-                        </Button>
-                    </div>
+                    <CardTitle className="text-lg">Deployment Access</CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                        Choose how users will access your deployed site
+                    </p>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                    <Combobox
-                        options={ensOptions}
-                        value={selectedEnsName}
-                        onValueChange={handleEnsSelect}
-                        placeholder={isWalletReady ? "Select an ENS domain..." : "Connect wallet to load ENS domains"}
-                        disabled={!isWalletReady || ensLoading || ensOptions.length === 0}
-                        loading={ensLoading}
-                        emptyMessage={isWalletReady ? "No ENS domains found for this wallet" : "Connect wallet to load ENS domains"}
-                    />
-                    {form.formState.errors.ensName && <p className="text-sm text-destructive font-medium">{form.formState.errors.ensName.message}</p>}
-                    {form.formState.errors.ensOwnerAddress && (
-                        <p className="text-sm text-destructive font-medium">{form.formState.errors.ensOwnerAddress.message}</p>
+                <CardContent className="space-y-4">
+                    {/* Option Cards */}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        {/* IPFS Only Option */}
+                        <button
+                            type="button"
+                            onClick={() => form.setValue("enableEns", false)}
+                            className={`relative flex flex-col items-start gap-2 rounded-lg border-2 p-4 text-left transition-all hover:bg-secondary/50 ${!enableEns ? "border-primary bg-primary/5" : "border-muted"
+                                }`}
+                        >
+                            <div className="flex items-center gap-2">
+                                <div className={`h-4 w-4 rounded-full border-2 ${!enableEns ? "border-primary bg-primary" : "border-muted-foreground"}`}>
+                                    {!enableEns && <div className="h-full w-full flex items-center justify-center"><div className="h-1.5 w-1.5 rounded-full bg-background" /></div>}
+                                </div>
+                                <span className="font-semibold">IPFS Only</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                Access via IPFS gateway URL. You can add ENS later.
+                            </p>
+                        </button>
+
+                        {/* With ENS Option */}
+                        <button
+                            type="button"
+                            onClick={() => form.setValue("enableEns", true)}
+                            className={`relative flex flex-col items-start gap-2 rounded-lg border-2 p-4 text-left transition-all hover:bg-secondary/50 ${enableEns ? "border-primary bg-primary/5" : "border-muted"
+                                }`}
+                        >
+                            <div className="flex items-center gap-2">
+                                <div className={`h-4 w-4 rounded-full border-2 ${enableEns ? "border-primary bg-primary" : "border-muted-foreground"}`}>
+                                    {enableEns && <div className="h-full w-full flex items-center justify-center"><div className="h-1.5 w-1.5 rounded-full bg-background" /></div>}
+                                </div>
+                                <span className="font-semibold">Link ENS Domain</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                Access via your .eth domain (e.g., yoursite.eth.limo)
+                            </p>
+                        </button>
+                    </div>
+
+                    {/* ENS Domain Selection (shown when ENS enabled) */}
+                    {enableEns && (
+                        <div className="space-y-3 pt-2 border-t">
+                            <div className="flex items-center justify-between">
+                                <p className="text-sm text-muted-foreground">
+                                    Select a domain owned by your connected wallet{walletDisplayName ? ` (${walletDisplayName})` : ""}
+                                </p>
+                                <Button type="button" variant="outline" size="sm" onClick={() => void refreshEns()} disabled={!isWalletReady || ensLoading}>
+                                    {ensLoading ? "Refreshing…" : "Refresh"}
+                                </Button>
+                            </div>
+                            <Combobox
+                                options={ensOptions}
+                                value={selectedEnsName}
+                                onValueChange={handleEnsSelect}
+                                placeholder={isWalletReady ? "Select an ENS domain..." : "Connect wallet to load ENS domains"}
+                                disabled={!isWalletReady || ensLoading || ensOptions.length === 0}
+                                loading={ensLoading}
+                                emptyMessage={isWalletReady ? "No ENS domains found for this wallet" : "Connect wallet to load ENS domains"}
+                            />
+                            {form.formState.errors.ensName && <p className="text-sm text-destructive font-medium">{form.formState.errors.ensName.message}</p>}
+                            {form.formState.errors.ensOwnerAddress && (
+                                <p className="text-sm text-destructive font-medium">{form.formState.errors.ensOwnerAddress.message}</p>
+                            )}
+                            {ensError && <p className="text-sm text-destructive font-medium">{ensError}</p>}
+                            {!ensLoading && isWalletReady && ensOptions.length === 0 && (
+                                <p className="text-sm text-muted-foreground">
+                                    No ENS domains detected for this wallet. Visit{" "}
+                                    <a
+                                        href="https://app.ens.domains"
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="font-medium text-primary underline-offset-2 hover:underline">
+                                        app.ens.domains
+                                    </a>{" "}
+                                    to register or manage your names.
+                                </p>
+                            )}
+                            {!isWalletReady && <p className="text-sm text-muted-foreground">Connect your Ethereum wallet to load available ENS domains.</p>}
+                            <input type="hidden" {...form.register("ensOwnerAddress")} />
+                        </div>
                     )}
-                    {ensError && <p className="text-sm text-destructive font-medium">{ensError}</p>}
-                    {!ensLoading && isWalletReady && ensOptions.length === 0 && (
-                        <p className="text-sm text-muted-foreground">
-                            No ENS domains detected for this wallet. Visit{" "}
-                            <a
-                                href="https://app.ens.domains"
-                                target="_blank"
-                                rel="noreferrer"
-                                className="font-medium text-primary underline-offset-2 hover:underline">
-                                app.ens.domains
-                            </a>{" "}
-                            to register or manage your names.
-                        </p>
-                    )}
-                    {!isWalletReady && <p className="text-sm text-muted-foreground">Connect your Ethereum wallet to load available ENS domains.</p>}
-                    <input type="hidden" {...form.register("ensOwnerAddress")} />
                 </CardContent>
             </Card>
 
             <Button type="submit" size="lg" className="w-full" disabled={form.formState.isSubmitting || !canSubmit}>
-                {form.formState.isSubmitting ? "Creating project..." : "Create project"}
+                {form.formState.isSubmitting ? "Creating & deploying..." : "Create & Deploy"}
             </Button>
-        </form>
+        </form >
     );
 }
