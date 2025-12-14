@@ -13,6 +13,7 @@ import { getDeploymentBuildDir } from '../utils/paths';
 import { deploymentQueue } from '../services/deployment-queue.service';
 import { env } from '../config/env';
 import { dynamicImport } from '../utils/dynamic-import';
+import { filecoinUploadService } from '../services/filecoin-upload.service';
 
 async function recoverCarRootCid(carPath: string): Promise<string | null> {
     try {
@@ -889,11 +890,49 @@ export class DeploymentsController {
                 carFilePath: result.carFilePath,
             });
 
-            // Note: Build directory is kept in builds/ folder for artifact download
-            // The frontend will handle the Filecoin upload
-            // Once uploaded, frontend will call POST /api/deployments/:id/ens with the IPFS CID
+            // Step: Upload to Filecoin
+            await db
+                .update(deployments)
+                .set({ status: 'uploading' })
+                .where(eq(deployments.id, deploymentId));
+
+            logger.info('Starting Filecoin upload', { deploymentId, carFilePath: result.carFilePath });
+
+            const uploadResult = await filecoinUploadService.uploadCar(
+                result.carFilePath,
+                result.carRootCid,
+                deploymentId
+            );
+
+            logger.info('Filecoin upload completed', {
+                deploymentId,
+                rootCid: uploadResult.rootCid,
+                pieceCid: uploadResult.pieceCid,
+                transactionHash: uploadResult.transactionHash,
+            });
+
+            // Update deployment with upload results and transition to awaiting_signature
+            await db
+                .update(deployments)
+                .set({
+                    status: 'awaiting_signature',
+                    ipfsCid: uploadResult.rootCid,
+                })
+                .where(eq(deployments.id, deploymentId));
+
+            logger.info('Deployment ready for ENS signature', {
+                deploymentId,
+                ipfsCid: uploadResult.rootCid,
+            });
+
+            // Cleanup build directory after successful upload if enabled
+            if (env.CLEANUP_BUILDS_ON_COMPLETE) {
+                await buildService.cleanupDeploymentBuild(deploymentId).catch((cleanupError) => {
+                    logger.warn('Failed to cleanup build directory after upload', { deploymentId, error: cleanupError });
+                });
+            }
         } catch (error) {
-            logger.error(`Build failed for deployment ${deploymentId}:`, error);
+            logger.error(`Build/upload failed for deployment ${deploymentId}:`, error);
 
             const currentStatus = await db.query.deployments.findFirst({
                 where: eq(deployments.id, deploymentId),

@@ -19,7 +19,6 @@ import { useNavigate } from "react-router-dom";
 import { projectsService } from "@/services/projects.service";
 import { useRepositories, useBranches } from "@/hooks/use-repositories";
 import { useEnsDomains } from "@/hooks/use-ens-domains";
-import { DEFAULT_ETHEREUM_RPC } from "@/utils/constants";
 
 const schema = z
     .object({
@@ -49,8 +48,6 @@ const schema = z
     );
 
 type FormValues = z.infer<typeof schema>;
-
-const ETH_MAINNET_RPC = DEFAULT_ETHEREUM_RPC;
 
 type Framework = "html" | "nextjs" | "vite" | "nuxt";
 
@@ -110,7 +107,7 @@ export function NewProjectForm() {
             repoName: "",
             repoUrl: "",
             repoBranch: "main",
-            framework: "html",
+            framework: "nextjs",
             ensName: "",
             ensOwnerAddress: "",
             buildCommand: undefined,
@@ -230,7 +227,7 @@ export function NewProjectForm() {
                 repoBranch: values.repoBranch,
                 ensName: values.ensName,
                 ensOwnerAddress: values.ensOwnerAddress,
-                ethereumRpcUrl: ETH_MAINNET_RPC, // Always use constant RPC
+                // ethereumRpcUrl is now handled by backend using its env
                 buildCommand: values.buildCommand || undefined,
                 outputDir: values.outputDir || undefined,
                 frontendDir: values.frontendDir || undefined

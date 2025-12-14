@@ -25,10 +25,17 @@ const envSchema = z.object({
   GITHUB_WEBHOOK_SECRET_ENCRYPTION_KEY: z.string().length(64),
 
   // Defaults
+  ALCHEMY_KEY: z.string().min(1),
   DEFAULT_ETHEREUM_RPC: z.string().url().default(`https://eth-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_KEY}`),
+  THEGRAPH_API_KEY: z.string().min(1),
 
   // Build cleanup
   CLEANUP_BUILDS_ON_COMPLETE: z.string().default('true').transform((val) => val === 'true'),
+
+  // Filecoin Pin Configuration
+  FILECOIN_PRIVATE_KEY: z.string().regex(/^0x[a-fA-F0-9]{64}$/, 'Must be a valid private key'),
+  FILECOIN_RPC_URL: z.string().url().optional(),
+  WARM_STORAGE_ADDRESS: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);

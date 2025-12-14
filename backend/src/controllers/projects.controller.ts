@@ -160,7 +160,7 @@ export class ProjectsController {
           autoDeployBranch: selectedBranch,
           ensName,
           ensOwnerAddress: normalizedOwnerAddress,
-          ethereumRpcUrl,
+          ethereumRpcUrl: ethereumRpcUrl || env.DEFAULT_ETHEREUM_RPC,
           buildCommand: buildCommand || null,
           outputDir: outputDir || null,
           frontendDir: frontendDir || null,

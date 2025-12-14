@@ -8,7 +8,7 @@ export const createProjectSchema = z.object({
         repoBranch: z.string().optional().default('main'),
         ensName: z.string().regex(/^[a-z0-9-]+\.eth$/, 'Invalid ENS name format'),
         ensOwnerAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/, 'Invalid Ethereum address'),
-        ethereumRpcUrl: z.string().url(),
+        ethereumRpcUrl: z.string().url().optional(), // Backend will use env.DEFAULT_ETHEREUM_RPC if not provided
         buildCommand: z.string().optional(),
         outputDir: z.string().optional(),
         frontendDir: z.string().min(1).optional(),

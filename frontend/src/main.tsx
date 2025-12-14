@@ -4,7 +4,6 @@ import { createRoot } from "react-dom/client";
 import { Toaster } from "sonner";
 import "./index.css";
 import App from "./app";
-import { FilecoinPinProvider } from "./context/filecoin-pin-provider";
 import { AuthProvider } from "./context/auth-context";
 import { ToastProvider } from "./context/toast-context";
 import { ErrorBoundary } from "./components/error-boundary";
@@ -20,16 +19,14 @@ createRoot(root).render(
     <StrictMode>
         <HashRouter>
             <WalletProvider>
-                <FilecoinPinProvider>
-                    <AuthProvider>
-                        <ToastProvider>
-                            <ErrorBoundary>
-                                <App />
-                            </ErrorBoundary>
-                            <Toaster position="bottom-right" richColors />
-                        </ToastProvider>
-                    </AuthProvider>
-                </FilecoinPinProvider>
+                <AuthProvider>
+                    <ToastProvider>
+                        <ErrorBoundary>
+                            <App />
+                        </ErrorBoundary>
+                        <Toaster position="bottom-right" richColors />
+                    </ToastProvider>
+                </AuthProvider>
             </WalletProvider>
         </HashRouter>
     </StrictMode>
