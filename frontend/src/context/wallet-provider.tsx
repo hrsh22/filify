@@ -1,7 +1,7 @@
 import { type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { WagmiProvider } from "wagmi";
-import { mainnet } from "@reown/appkit/networks";
+import { mainnet, sepolia } from "@reown/appkit/networks";
 import { createAppKit, modal } from "@reown/appkit/react";
 import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
 import { REOWN_PROJECT_ID } from "@/utils/constants";
@@ -19,7 +19,8 @@ const metadata = {
     icons: ["https://filify.app/icon.png"]
 };
 
-const networks = [mainnet] as [typeof mainnet];
+// Support both mainnet and Sepolia
+const networks = [mainnet, sepolia] as [typeof mainnet, typeof sepolia];
 
 const wagmiAdapter = new WagmiAdapter({
     networks,

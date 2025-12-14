@@ -20,6 +20,7 @@ export const projects = sqliteTable('projects', {
   repoUrl: text('repo_url').notNull(),
   repoBranch: text('repo_branch').notNull().default('main'),
   autoDeployBranch: text('auto_deploy_branch').notNull().default('main'),
+  network: text('network').notNull().default('mainnet'), // 'mainnet' | 'sepolia'
   ensName: text('ens_name').notNull(),
   ensOwnerAddress: text('ens_owner_address').notNull(),
   ethereumRpcUrl: text('ethereum_rpc_url').notNull(),

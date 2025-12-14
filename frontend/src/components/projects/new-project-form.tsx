@@ -12,12 +12,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Combobox } from "@/components/ui/combobox";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Info, ExternalLink, Code } from "lucide-react";
 import { useToast } from "@/context/toast-context";
+import { useNetwork } from "@/context/network-context";
 import { useNavigate } from "react-router-dom";
 import { projectsService } from "@/services/projects.service";
 import { useRepositories, useBranches } from "@/hooks/use-repositories";
 import { useEnsDomains } from "@/hooks/use-ens-domains";
-import { DEFAULT_ETHEREUM_RPC } from "@/utils/constants";
 
 const schema = z
     .object({
@@ -48,15 +50,13 @@ const schema = z
 
 type FormValues = z.infer<typeof schema>;
 
-const ETH_MAINNET_RPC = DEFAULT_ETHEREUM_RPC;
-
 type Framework = "html" | "nextjs" | "vite" | "nuxt";
 
 const FRAMEWORKS: { value: Framework; label: string; status: "supported" | "coming-soon" }[] = [
-    { value: "html", label: "HTML", status: "supported" },
     { value: "nextjs", label: "Next.js", status: "supported" },
     { value: "vite", label: "Vite", status: "supported" },
-    { value: "nuxt", label: "Nuxt", status: "supported" }
+    { value: "nuxt", label: "Nuxt", status: "supported" },
+    { value: "html", label: "HTML", status: "supported" }
 ];
 
 function formatAddress(address: string) {
@@ -66,6 +66,7 @@ function formatAddress(address: string) {
 export function NewProjectForm() {
     const navigate = useNavigate();
     const { showToast } = useToast();
+    const { network } = useNetwork();
     const { address, isConnected } = useAppKitAccount();
     const publicClient = usePublicClient();
     const { repositories, loading: reposLoading, error: reposError, refresh } = useRepositories();
@@ -108,7 +109,7 @@ export function NewProjectForm() {
             repoName: "",
             repoUrl: "",
             repoBranch: "main",
-            framework: "html",
+            framework: "nextjs",
             ensName: "",
             ensOwnerAddress: "",
             buildCommand: undefined,
@@ -226,9 +227,9 @@ export function NewProjectForm() {
                 repoName: values.repoName,
                 repoUrl: values.repoUrl,
                 repoBranch: values.repoBranch,
+                network,
                 ensName: values.ensName,
                 ensOwnerAddress: values.ensOwnerAddress,
-                ethereumRpcUrl: ETH_MAINNET_RPC, // Always use constant RPC
                 buildCommand: values.buildCommand || undefined,
                 outputDir: values.outputDir || undefined,
                 frontendDir: values.frontendDir || undefined
@@ -264,13 +265,12 @@ export function NewProjectForm() {
                                         }
                                     }}
                                     disabled={isComingSoon}
-                                    className={`relative rounded-lg border p-4 text-left transition-smooth ${
-                                        isSelected
-                                            ? "border-primary bg-primary/10"
-                                            : isComingSoon
-                                              ? "border-border bg-muted/20 opacity-60 cursor-not-allowed"
-                                              : "border-border hover:border-primary/50 hover:bg-accent/50"
-                                    }`}>
+                                    className={`relative rounded-lg border p-4 text-left transition-smooth ${isSelected
+                                        ? "border-primary bg-primary/10"
+                                        : isComingSoon
+                                            ? "border-border bg-muted/20 opacity-60 cursor-not-allowed"
+                                            : "border-border hover:border-primary/50 hover:bg-accent/50"
+                                        }`}>
                                     <div className="flex items-center justify-between">
                                         <span className="font-semibold">{framework.label}</span>
                                         {isComingSoon ? (
@@ -291,6 +291,192 @@ export function NewProjectForm() {
                 </CardContent>
             </Card>
 
+            {/* Configuration Requirements */}
+            {selectedFramework && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                            <Info className="h-5 w-5 text-primary" />
+                            Configuration Requirements
+                        </CardTitle>
+                        <p className="text-sm text-muted-foreground">Your project needs specific configuration for static deployment</p>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        {selectedFramework === "nextjs" && (
+                            <Alert variant="info">
+                                <Info className="h-4 w-4" />
+                                <AlertTitle>Next.js Static Export Configuration</AlertTitle>
+                                <AlertDescription className="space-y-3 mt-2">
+                                    <p>
+                                        Your Next.js project must be configured for static export. Add the following to your{" "}
+                                        <code className="px-1.5 py-0.5 rounded bg-muted text-sm font-mono">next.config.js</code>:
+                                    </p>
+                                    <div className="rounded-lg bg-muted p-4 font-mono text-xs overflow-x-auto">
+                                        <pre className="whitespace-pre-wrap">
+                                            {`module.exports = {
+  output: 'export',
+  trailingSlash: true
+}`}
+                                        </pre>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                        <strong>Note:</strong> We'll automatically create this config if missing, but we recommend adding it to your
+                                        repository for consistency.
+                                    </p>
+                                    <a
+                                        href="https://nextjs.org/docs/app/api-reference/next-config-js/output"
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
+                                        <ExternalLink className="h-3 w-3" />
+                                        Next.js Static Export Documentation
+                                    </a>
+                                </AlertDescription>
+                            </Alert>
+                        )}
+
+                        {selectedFramework === "vite" && (
+                            <Alert variant="warning">
+                                <Info className="h-4 w-4" />
+                                <AlertTitle>Vite Static Deployment - Router Configuration</AlertTitle>
+                                <AlertDescription className="space-y-3 mt-2">
+                                    <p>
+                                        For static deployments, you must use{" "}
+                                        <code className="px-1.5 py-0.5 rounded bg-muted text-sm font-mono">HashRouter</code> instead of{" "}
+                                        <code className="px-1.5 py-0.5 rounded bg-muted text-sm font-mono">BrowserRouter</code>.
+                                    </p>
+                                    <div className="space-y-2">
+                                        <div>
+                                            <p className="text-xs text-muted-foreground mb-1">Before (won't work with static hosting):</p>
+                                            <div className="rounded-lg bg-muted p-3 font-mono text-xs overflow-x-auto">
+                                                <pre className="whitespace-pre-wrap">{`import { BrowserRouter } from 'react-router-dom'`}</pre>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-muted-foreground mb-1">After (works with static hosting):</p>
+                                            <div className="rounded-lg bg-muted p-3 font-mono text-xs overflow-x-auto">
+                                                <pre className="whitespace-pre-wrap">
+                                                    {`import { HashRouter } from 'react-router-dom'
+
+// Wrap your app:
+<HashRouter>
+  <App />
+</HashRouter>`}
+                                                </pre>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                        <strong>Why:</strong> Static file hosting doesn't support server-side routing. HashRouter uses{" "}
+                                        <code className="px-1 py-0.5 rounded bg-muted text-xs font-mono">#</code> in URLs which works with static
+                                        hosting.
+                                    </p>
+                                    <a
+                                        href="https://reactrouter.com/en/main/router-components/hash-router"
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
+                                        <ExternalLink className="h-3 w-3" />
+                                        React Router HashRouter Documentation
+                                    </a>
+                                </AlertDescription>
+                            </Alert>
+                        )}
+
+                        {selectedFramework === "nuxt" && (
+                            <Alert variant="info">
+                                <Info className="h-4 w-4" />
+                                <AlertTitle>Nuxt 3 Static Generation Configuration</AlertTitle>
+                                <AlertDescription className="space-y-3 mt-2">
+                                    <p>
+                                        Configure Nuxt for static site generation. Add the following to your{" "}
+                                        <code className="px-1.5 py-0.5 rounded bg-muted text-sm font-mono">nuxt.config.ts</code>:
+                                    </p>
+                                    <div className="rounded-lg bg-muted p-4 font-mono text-xs overflow-x-auto">
+                                        <pre className="whitespace-pre-wrap">
+                                            {`export default defineNuxtConfig({
+  ssr: false,  // Disable server-side rendering
+  nitro: {
+    preset: 'static'
+  }
+})`}
+                                        </pre>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                        <strong>Note:</strong> The build command is already set to{" "}
+                                        <code className="px-1 py-0.5 rounded bg-muted text-xs font-mono">npm run generate</code> which is correct for
+                                        static generation.
+                                    </p>
+                                    <a
+                                        href="https://nuxt.com/docs/getting-started/deployment#static-hosting"
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
+                                        <ExternalLink className="h-3 w-3" />
+                                        Nuxt Static Generation Documentation
+                                    </a>
+                                </AlertDescription>
+                            </Alert>
+                        )}
+
+                        {selectedFramework === "html" && (
+                            <Alert variant="info">
+                                <Info className="h-4 w-4" />
+                                <AlertTitle>HTML Static Site Requirements</AlertTitle>
+                                <AlertDescription className="space-y-3 mt-2">
+                                    <p>For HTML static sites to work perfectly with static hosting, ensure the following:</p>
+                                    <ul className="list-disc list-inside space-y-2 text-sm">
+                                        <li>
+                                            <strong>Use relative paths</strong> for all assets (CSS, JavaScript, images)
+                                        </li>
+                                        <li>
+                                            <strong>No server-side dependencies</strong> - all functionality must be client-side
+                                        </li>
+                                        <li>
+                                            <strong>index.html at root</strong> - your main HTML file should be at the repository root or in the
+                                            specified frontend directory
+                                        </li>
+                                        <li>
+                                            <strong>No absolute paths</strong> - avoid paths starting with{" "}
+                                            <code className="px-1 py-0.5 rounded bg-muted text-xs font-mono">/</code> that won't work with static
+                                            hosting
+                                        </li>
+                                    </ul>
+                                    <div className="space-y-2">
+                                        <div>
+                                            <p className="text-xs text-muted-foreground mb-1">❌ Avoid (absolute paths):</p>
+                                            <div className="rounded-lg bg-muted p-3 font-mono text-xs overflow-x-auto">
+                                                <pre className="whitespace-pre-wrap">
+                                                    {`<link rel="stylesheet" href="/css/style.css">
+<script src="/js/app.js"></script>
+<img src="/images/logo.png">`}
+                                                </pre>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-muted-foreground mb-1">✅ Use (relative paths):</p>
+                                            <div className="rounded-lg bg-muted p-3 font-mono text-xs overflow-x-auto">
+                                                <pre className="whitespace-pre-wrap">
+                                                    {`<link rel="stylesheet" href="css/style.css">
+<script src="js/app.js"></script>
+<img src="images/logo.png">`}
+                                                </pre>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                        <strong>Note:</strong> All files in your repository (except{" "}
+                                        <code className="px-1 py-0.5 rounded bg-muted text-xs font-mono">.git</code>,{" "}
+                                        <code className="px-1 py-0.5 rounded bg-muted text-xs font-mono">.github</code>, and{" "}
+                                        <code className="px-1 py-0.5 rounded bg-muted text-xs font-mono">node_modules</code>) will be deployed as-is.
+                                    </p>
+                                </AlertDescription>
+                            </Alert>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
+
             {/* Build Configuration */}
             {(selectedFramework === "nextjs" || selectedFramework === "vite" || selectedFramework === "nuxt") && (
                 <Card>
@@ -300,8 +486,8 @@ export function NewProjectForm() {
                             {selectedFramework === "nextjs"
                                 ? "Customize how Filify builds and exports your Next.js project."
                                 : selectedFramework === "nuxt"
-                                  ? "Customize how Filify builds and generates your Nuxt 3 project."
-                                  : "Customize how Filify builds your Vite project."}
+                                    ? "Customize how Filify builds and generates your Nuxt 3 project."
+                                    : "Customize how Filify builds your Vite project."}
                         </p>
                     </CardHeader>
                     <CardContent>

@@ -1,20 +1,61 @@
 import { useEffect, useRef } from 'react'
 import { deploymentsService } from '@/services/deployments.service'
-import { useFilecoinUpload } from './use-filecoin-upload'
 import { useToast } from '@/context/toast-context'
 import type { Deployment } from '@/types'
 import { useAppKitAccount } from '@reown/appkit/react'
 import { useWalletClient } from 'wagmi'
 
 const POLL_INTERVAL_MS = 5_000
-const ENS_REJECTION_COOLDOWN_MS = 60_000
 
-function isUserRejectedRequest(error: unknown) {
+/**
+ * Check if the error is a user rejection/cancellation.
+ * Handles various wallet error formats:
+ * - MetaMask: code 4001
+ * - WalletConnect/viem: "User canceled" in message or Details section
+ */
+function isUserRejectedRequest(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false
+
   const code = (error as { code?: number }).code
   if (code === 4001) return true
-  const message = (error as Error).message?.toLowerCase() ?? ''
-  return message.includes('user rejected') || message.includes('rejected the request')
+
+  // Get the full error message (including multi-line with Details:)
+  const message = (error as Error).message ?? ''
+  const messageLower = message.toLowerCase()
+
+  // Check for rejection patterns in the message
+  const rejectionPatterns = [
+    'user rejected',
+    'rejected the request',
+    'user canceled',
+    'user cancelled',
+    'user denied',
+    'details: user canceled',  // viem puts this in Details section
+    'details: user cancelled',
+  ]
+
+  for (const pattern of rejectionPatterns) {
+    if (messageLower.includes(pattern)) {
+      return true
+    }
+  }
+
+  // Also check error.details if it exists (some wallet errors have this property)
+  const details = (error as { details?: string }).details
+  if (details && typeof details === 'string') {
+    const detailsLower = details.toLowerCase()
+    if (detailsLower.includes('user canceled') || detailsLower.includes('user cancelled')) {
+      return true
+    }
+  }
+
+  // Check nested cause (viem wraps errors)
+  const cause = (error as { cause?: unknown }).cause
+  if (cause && typeof cause === 'object') {
+    return isUserRejectedRequest(cause)
+  }
+
+  return false
 }
 
 function isDocumentVisible() {
@@ -22,12 +63,22 @@ function isDocumentVisible() {
   return document.visibilityState === 'visible'
 }
 
+/**
+ * Polls for deployments awaiting ENS signature.
+ * 
+ * Note: Filecoin upload is now handled by the backend.
+ * This hook only processes ENS signature requests once the
+ * backend has completed the build and upload (status: awaiting_signature).
+ * 
+ * If the user rejects/cancels the signature, the deployment is cancelled.
+ */
 export function useAutoDeployPoller(enabled = true) {
-  const { uploadFile } = useFilecoinUpload()
   const { showToast } = useToast()
   const processingRef = useRef(false)
-  const rejectionRef = useRef(new Map<string, number>())
-  const inFlightRef = useRef(new Set<string>())
+  // Track deployments that are actively showing a wallet popup or being processed
+  const activeSignaturesRef = useRef(new Set<string>())
+  // Track deployments that have been cancelled (to prevent re-processing before status updates)
+  const cancelledRef = useRef(new Set<string>())
   const { address } = useAppKitAccount()
   const { data: walletClient } = useWalletClient()
 
@@ -40,61 +91,46 @@ export function useAutoDeployPoller(enabled = true) {
     let timer: number | undefined
 
     const processDeployment = async (deployment: Deployment) => {
-      if (inFlightRef.current.has(deployment.id)) {
-        return
-      }
-      inFlightRef.current.add(deployment.id)
-      if (!walletClient || !address) {
-        console.warn('[AutoDeployPoller] Wallet not ready, skipping deployment')
-        inFlightRef.current.delete(deployment.id)
+      // Skip if already processing this deployment or if it was cancelled
+      if (activeSignaturesRef.current.has(deployment.id) || cancelledRef.current.has(deployment.id)) {
+        console.log('[AutoDeployPoller] Skipping deployment (already processing or cancelled)', {
+          deploymentId: deployment.id,
+          isActive: activeSignaturesRef.current.has(deployment.id),
+          isCancelled: cancelledRef.current.has(deployment.id),
+        })
         return
       }
 
-      const skipUpload = deployment.status === 'awaiting_signature'
-      let cid = deployment.ipfsCid ?? null
-      let uploadSucceeded = skipUpload // If skipping upload, we assume previous upload succeeded
-      let stage: 'download' | 'upload' | 'prepare' | 'sign' | 'confirm' | 'idle' = 'idle'
-      console.log('[AutoDeployPoller] Starting processing', {
+      // Mark as actively processing BEFORE any async work
+      activeSignaturesRef.current.add(deployment.id)
+
+      if (!walletClient || !address) {
+        console.warn('[AutoDeployPoller] Wallet not ready, skipping deployment')
+        activeSignaturesRef.current.delete(deployment.id)
+        return
+      }
+
+      // Backend now handles upload - we only process awaiting_signature
+      const cid = deployment.ipfsCid
+      if (!cid) {
+        console.warn('[AutoDeployPoller] Deployment missing IPFS CID, skipping', {
+          deploymentId: deployment.id
+        })
+        activeSignaturesRef.current.delete(deployment.id)
+        return
+      }
+
+      console.log('[AutoDeployPoller] Processing deployment for ENS signature', {
         deploymentId: deployment.id,
-        status: deployment.status,
-        skipUpload,
+        cid,
       })
 
       try {
-        if (!skipUpload) {
-          stage = 'upload'
-          console.log('[AutoDeployPoller] Uploading backend CAR artifact to Filecoin', {
-            deploymentId: deployment.id,
-          })
-          try {
-            cid = await uploadFile(deployment.id, {
-              deploymentId: deployment.id,
-              projectId: deployment.projectId,
-            })
-            uploadSucceeded = true
-          } catch (uploadError) {
-            uploadSucceeded = false
-            // Mark deployment as failed and return early
-            const message = uploadError instanceof Error ? uploadError.message : 'Upload failed'
-            try {
-              await deploymentsService.markUploadFailed(deployment.id, message)
-            } catch (markError) {
-              console.error('[AutoDeployPoller] failed to mark deployment as failed', markError)
-            }
-            console.error('[AutoDeployPoller] Upload failed', uploadError)
-            return
-          }
-        }
-
-        // Only proceed to ENS if upload succeeded (or was skipped because we already have a CID)
-        if (!uploadSucceeded || !cid) {
-          throw new Error('Missing IPFS CID for ENS update')
-        }
-
-        stage = 'prepare'
+        // Step 1: Prepare ENS payload
         console.log('[AutoDeployPoller] Preparing ENS payload', { deploymentId: deployment.id, cid })
         const prepareResponse = await deploymentsService.prepareEns(deployment.id, cid)
 
+        // Check chain ID matches
         if (
           prepareResponse.payload.chainId &&
           walletClient.chain &&
@@ -107,7 +143,7 @@ export function useAutoDeployPoller(enabled = true) {
           throw error
         }
 
-        stage = 'sign'
+        // Step 2: Request wallet signature
         console.log('[AutoDeployPoller] Requesting wallet signature', {
           deploymentId: deployment.id,
           resolver: prepareResponse.payload.resolverAddress,
@@ -118,36 +154,49 @@ export function useAutoDeployPoller(enabled = true) {
           data: prepareResponse.payload.data as `0x${string}`,
         })
 
-        stage = 'confirm'
+        // Step 3: Confirm ENS transaction
         console.log('[AutoDeployPoller] Waiting for ENS confirmation', { deploymentId: deployment.id, txHash })
         await deploymentsService.confirmEns(deployment.id, txHash)
 
         const label = deployment.commitSha?.slice(0, 7) ?? deployment.id.slice(0, 6)
         showToast(`Deployed ${label}`, 'success')
         console.log('[AutoDeployPoller] Deployment completed', { deploymentId: deployment.id, txHash })
-        rejectionRef.current.delete(deployment.id)
       } catch (error) {
-        if (isUserRejectedRequest(error)) {
-          rejectionRef.current.set(deployment.id, Date.now())
-          console.warn('[AutoDeployPoller] ENS signature rejected', error)
-          showToast('ENS signature rejected. Reopen the deployment to finish publishing when ready.', 'info')
+        // Check if user rejected/cancelled the signature
+        const isRejection = isUserRejectedRequest(error)
+        console.log('[AutoDeployPoller] Error caught:', {
+          isRejection,
+          message: (error as Error)?.message?.substring(0, 200),
+          deploymentId: deployment.id
+        })
+
+        if (isRejection) {
+          // User rejected/cancelled the signature - cancel the deployment
+          console.warn('[AutoDeployPoller] ENS signature rejected/cancelled, cancelling deployment', {
+            deploymentId: deployment.id
+          })
+
+          // Mark as cancelled immediately to prevent re-processing
+          cancelledRef.current.add(deployment.id)
+
+          try {
+            await deploymentsService.cancel(deployment.id)
+            showToast('Deployment cancelled', 'info')
+            console.log('[AutoDeployPoller] Deployment cancelled after signature rejection', {
+              deploymentId: deployment.id
+            })
+          } catch (cancelError) {
+            console.error('[AutoDeployPoller] Failed to cancel deployment', cancelError)
+            showToast('Failed to cancel deployment', 'error')
+            // Remove from cancelled set if cancel failed so user can retry
+            cancelledRef.current.delete(deployment.id)
+          }
           return
         }
 
-        const message = error instanceof Error ? error.message : 'Upload failed'
-
-        if (stage === 'upload' || stage === 'prepare') {
-          try {
-            await deploymentsService.markUploadFailed(deployment.id, message)
-          } catch (markError) {
-            console.error('[AutoDeployPoller] failed to mark deployment as failed', markError)
-          }
-        }
-
-        console.error('[AutoDeployPoller] deployment failed', error)
-        // Silently fail - no error toast
+        console.error('[AutoDeployPoller] ENS signing failed', error)
       } finally {
-        inFlightRef.current.delete(deployment.id)
+        activeSignaturesRef.current.delete(deployment.id)
       }
     }
 
@@ -162,32 +211,17 @@ export function useAutoDeployPoller(enabled = true) {
           return
         }
 
-        const [pending, uploadingDeployments, awaitingSignature] = await Promise.all([
-          deploymentsService.list({ status: 'pending_upload', limit: 10 }),
-          deploymentsService.list({ status: 'uploading', limit: 10 }),
-          deploymentsService.list({ status: 'awaiting_signature', limit: 10 }),
-        ])
+        // Only poll for awaiting_signature - backend handles upload now
+        const awaitingSignature = await deploymentsService.list({
+          status: 'awaiting_signature',
+          limit: 10
+        })
 
-        const candidates = [
-          ...pending,
-          ...uploadingDeployments.filter((deployment) => !deployment.ipfsCid),
-          ...awaitingSignature,
-        ]
-        const seen = new Set<string>()
-        for (const deployment of candidates) {
-          if (seen.has(deployment.id)) {
-            continue
-          }
-          seen.add(deployment.id)
-
-          const lastRejection = rejectionRef.current.get(deployment.id)
-          if (lastRejection && Date.now() - lastRejection < ENS_REJECTION_COOLDOWN_MS) {
-            continue
-          }
-
+        for (const deployment of awaitingSignature) {
           if (cancelled) {
             break
           }
+          // processDeployment will skip if already active or cancelled
           await processDeployment(deployment)
         }
       } catch (error) {
@@ -208,5 +242,5 @@ export function useAutoDeployPoller(enabled = true) {
         clearInterval(timer)
       }
     }
-  }, [enabled, uploadFile, showToast, walletClient, address])
+  }, [enabled, showToast, walletClient, address])
 }

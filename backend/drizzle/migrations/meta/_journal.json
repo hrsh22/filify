@@ -43,6 +43,13 @@
       "when": 1763878921277,
       "tag": "0005_silly_the_anarchist",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1765712273814,
+      "tag": "0006_bumpy_scarlet_spider",
+      "breakpoints": true
     }
   ]
 }

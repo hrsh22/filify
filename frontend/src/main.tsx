@@ -4,11 +4,11 @@ import { createRoot } from "react-dom/client";
 import { Toaster } from "sonner";
 import "./index.css";
 import App from "./app";
-import { FilecoinPinProvider } from "./context/filecoin-pin-provider";
 import { AuthProvider } from "./context/auth-context";
 import { ToastProvider } from "./context/toast-context";
 import { ErrorBoundary } from "./components/error-boundary";
 import { WalletProvider } from "./context/wallet-provider";
+import { NetworkProvider } from "./context/network-context";
 
 const root = document.getElementById("root");
 
@@ -19,8 +19,8 @@ if (!root) {
 createRoot(root).render(
     <StrictMode>
         <HashRouter>
-            <WalletProvider>
-                <FilecoinPinProvider>
+            <NetworkProvider>
+                <WalletProvider>
                     <AuthProvider>
                         <ToastProvider>
                             <ErrorBoundary>
@@ -29,8 +29,8 @@ createRoot(root).render(
                             <Toaster position="bottom-right" richColors />
                         </ToastProvider>
                     </AuthProvider>
-                </FilecoinPinProvider>
-            </WalletProvider>
+                </WalletProvider>
+            </NetworkProvider>
         </HashRouter>
     </StrictMode>
 );

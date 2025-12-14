@@ -13,6 +13,7 @@ import projectsRoutes from './routes/projects.routes';
 import repositoriesRoutes from './routes/repositories.routes';
 import deploymentsRoutes from './routes/deployments.routes';
 import webhooksRoutes from './routes/webhooks.routes';
+import ensRoutes from './routes/ens.routes';
 import './config/passport'; // Initialize passport strategies
 import fs from 'fs';
 import path from 'path';
@@ -95,6 +96,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectsRoutes);
 app.use('/api/repositories', repositoriesRoutes);
 app.use('/api/deployments', deploymentsRoutes);
+app.use('/api/ens', ensRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
