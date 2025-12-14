@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Project } from '@/types'
 import { projectsService } from '@/services/projects.service'
+import { useNetwork } from '@/context/network-context'
 
 export function useProjects() {
+  const { network } = useNetwork()
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -10,7 +12,7 @@ export function useProjects() {
   const fetchProjects = useCallback(async () => {
     try {
       setLoading(true)
-      const data = await projectsService.getAll()
+      const data = await projectsService.getAll(network)
       setProjects(data)
       setError(null)
     } catch (err) {
@@ -19,7 +21,7 @@ export function useProjects() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [network])
 
   useEffect(() => {
     void fetchProjects()
@@ -32,5 +34,3 @@ export function useProjects() {
     refresh: fetchProjects,
   }
 }
-
-

@@ -7,6 +7,7 @@ import { githubService } from '../services/github.service';
 import { logger } from '../utils/logger';
 import { webhookSecretService } from '../services/webhook-secret.service';
 import { env } from '../config/env';
+import { getNetworkConfig, isValidNetwork, type NetworkType } from '../config/network-config';
 
 const WEBHOOK_ENDPOINT = '/api/webhooks/github';
 
@@ -17,12 +18,14 @@ function getWebhookUrl() {
 export class ProjectsController {
   async list(req: Request, res: Response) {
     const userId = (req.user as any).id;
+    const networkParam = req.query.network as string | undefined;
+    const network: NetworkType = networkParam && isValidNetwork(networkParam) ? networkParam : 'mainnet';
 
-    logger.debug('Listing projects', { userId });
+    logger.debug('Listing projects', { userId, network });
 
     try {
       const userProjects = await db.query.projects.findMany({
-        where: eq(projects.userId, userId),
+        where: and(eq(projects.userId, userId), eq(projects.network, network)),
         with: {
           deployments: {
             limit: 1,
@@ -33,6 +36,7 @@ export class ProjectsController {
 
       logger.info('Projects listed successfully', {
         userId,
+        network,
         count: userProjects.length,
       });
 
@@ -104,6 +108,7 @@ export class ProjectsController {
       repoName,
       repoUrl,
       repoBranch,
+      network = 'mainnet',
       ensName,
       ensOwnerAddress,
       ethereumRpcUrl,
@@ -113,12 +118,14 @@ export class ProjectsController {
     } = req.body;
 
     const normalizedOwnerAddress = ensOwnerAddress.toLowerCase();
+    const networkConfig = getNetworkConfig(network as NetworkType);
 
     logger.info('Creating new project', {
       userId,
       projectName: name,
       repoName,
       repoBranch: repoBranch || 'main',
+      network,
       ensName,
       ensOwnerAddress: normalizedOwnerAddress,
     });
@@ -158,9 +165,10 @@ export class ProjectsController {
           repoUrl,
           repoBranch: selectedBranch,
           autoDeployBranch: selectedBranch,
+          network: network as NetworkType,
           ensName,
           ensOwnerAddress: normalizedOwnerAddress,
-          ethereumRpcUrl: ethereumRpcUrl || env.DEFAULT_ETHEREUM_RPC,
+          ethereumRpcUrl: ethereumRpcUrl || networkConfig.rpcUrl,
           buildCommand: buildCommand || null,
           outputDir: outputDir || null,
           frontendDir: frontendDir || null,

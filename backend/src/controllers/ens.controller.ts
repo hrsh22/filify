@@ -1,10 +1,7 @@
 import { Request, Response } from 'express';
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
-
-// The Graph ENS subgraph endpoint
-const ENS_MAINNET_SUBGRAPH =
-    'https://gateway.thegraph.com/api/subgraphs/id/5XqPmWe6gjyrJtFn9cLy237i4cWw2j9HcUJEXsP5qGtH';
+import { getNetworkConfig, isValidNetwork, type NetworkType } from '../config/network-config';
 
 const ENS_DOMAINS_QUERY = /* GraphQL */ `
     query EnsDomains($owner: Bytes!) {
@@ -90,9 +87,14 @@ class EnsController {
     /**
      * GET /api/ens/domains/:address
      * Fetch ENS domains owned by an address via The Graph subgraph
+     * Query params:
+     *   - network: 'mainnet' | 'sepolia' (default: 'mainnet')
      */
     async getDomains(req: Request, res: Response) {
         const { address } = req.params;
+        const networkParam = req.query.network as string | undefined;
+        const network: NetworkType = networkParam && isValidNetwork(networkParam) ? networkParam : 'mainnet';
+        const networkConfig = getNetworkConfig(network);
 
         if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
             return res.status(400).json({ error: 'Invalid Ethereum address' });
@@ -101,9 +103,9 @@ class EnsController {
         const normalizedAddress = address.toLowerCase();
 
         try {
-            logger.info('Fetching ENS domains', { address: normalizedAddress });
+            logger.info('Fetching ENS domains', { address: normalizedAddress, network });
 
-            const response = await fetch(ENS_MAINNET_SUBGRAPH, {
+            const response = await fetch(networkConfig.ensSubgraphUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

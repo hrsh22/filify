@@ -15,6 +15,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Info, ExternalLink, Code } from "lucide-react";
 import { useToast } from "@/context/toast-context";
+import { useNetwork } from "@/context/network-context";
 import { useNavigate } from "react-router-dom";
 import { projectsService } from "@/services/projects.service";
 import { useRepositories, useBranches } from "@/hooks/use-repositories";
@@ -65,6 +66,7 @@ function formatAddress(address: string) {
 export function NewProjectForm() {
     const navigate = useNavigate();
     const { showToast } = useToast();
+    const { network } = useNetwork();
     const { address, isConnected } = useAppKitAccount();
     const publicClient = usePublicClient();
     const { repositories, loading: reposLoading, error: reposError, refresh } = useRepositories();
@@ -225,9 +227,9 @@ export function NewProjectForm() {
                 repoName: values.repoName,
                 repoUrl: values.repoUrl,
                 repoBranch: values.repoBranch,
+                network,
                 ensName: values.ensName,
                 ensOwnerAddress: values.ensOwnerAddress,
-                // ethereumRpcUrl is now handled by backend using its env
                 buildCommand: values.buildCommand || undefined,
                 outputDir: values.outputDir || undefined,
                 frontendDir: values.frontendDir || undefined
@@ -263,13 +265,12 @@ export function NewProjectForm() {
                                         }
                                     }}
                                     disabled={isComingSoon}
-                                    className={`relative rounded-lg border p-4 text-left transition-smooth ${
-                                        isSelected
-                                            ? "border-primary bg-primary/10"
-                                            : isComingSoon
-                                              ? "border-border bg-muted/20 opacity-60 cursor-not-allowed"
-                                              : "border-border hover:border-primary/50 hover:bg-accent/50"
-                                    }`}>
+                                    className={`relative rounded-lg border p-4 text-left transition-smooth ${isSelected
+                                        ? "border-primary bg-primary/10"
+                                        : isComingSoon
+                                            ? "border-border bg-muted/20 opacity-60 cursor-not-allowed"
+                                            : "border-border hover:border-primary/50 hover:bg-accent/50"
+                                        }`}>
                                     <div className="flex items-center justify-between">
                                         <span className="font-semibold">{framework.label}</span>
                                         {isComingSoon ? (
@@ -485,8 +486,8 @@ export function NewProjectForm() {
                             {selectedFramework === "nextjs"
                                 ? "Customize how Filify builds and exports your Next.js project."
                                 : selectedFramework === "nuxt"
-                                  ? "Customize how Filify builds and generates your Nuxt 3 project."
-                                  : "Customize how Filify builds your Vite project."}
+                                    ? "Customize how Filify builds and generates your Nuxt 3 project."
+                                    : "Customize how Filify builds your Vite project."}
                         </p>
                     </CardHeader>
                     <CardContent>

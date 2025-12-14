@@ -1,0 +1,1 @@
+ALTER TABLE `projects` ADD `network` text DEFAULT 'mainnet' NOT NULL;

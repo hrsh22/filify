@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { API_URL } from '@/utils/constants'
+import { useNetwork, type Network } from '@/context/network-context'
 
 export interface EnsDomain {
     name: string
@@ -13,12 +14,12 @@ interface BackendEnsDomain {
     expiry?: string | null // ISO date string from backend
 }
 
-async function fetchEnsDomains(ownerAddress: string): Promise<EnsDomain[]> {
+async function fetchEnsDomains(ownerAddress: string, network: Network): Promise<EnsDomain[]> {
     const normalizedAddress = ownerAddress.toLowerCase()
 
-    console.log('[fetchEnsDomains] Fetching from backend:', normalizedAddress)
+    console.log('[fetchEnsDomains] Fetching from backend:', normalizedAddress, 'network:', network)
 
-    const response = await fetch(`${API_URL}/ens/domains/${normalizedAddress}`, {
+    const response = await fetch(`${API_URL}/ens/domains/${normalizedAddress}?network=${network}`, {
         method: 'GET',
         credentials: 'include',
     })
@@ -32,6 +33,7 @@ async function fetchEnsDomains(ownerAddress: string): Promise<EnsDomain[]> {
             statusText: response.statusText,
             error: errorData,
             address: normalizedAddress,
+            network,
         })
         throw new Error(errorData.error ?? `Failed to query ENS domains: ${response.statusText}`)
     }
@@ -41,6 +43,7 @@ async function fetchEnsDomains(ownerAddress: string): Promise<EnsDomain[]> {
     console.log('[fetchEnsDomains] Backend response:', {
         domainsCount: json.domains?.length ?? 0,
         address: normalizedAddress,
+        network,
     })
 
     return (json.domains ?? []).map((domain) => ({
@@ -51,6 +54,7 @@ async function fetchEnsDomains(ownerAddress: string): Promise<EnsDomain[]> {
 }
 
 export function useEnsDomains(ownerAddress: string | null | undefined) {
+    const { network } = useNetwork()
     const [domains, setDomains] = useState<EnsDomain[]>([])
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -60,11 +64,12 @@ export function useEnsDomains(ownerAddress: string | null | undefined) {
     console.log('[useEnsDomains] Hook initialized/updated', {
         ownerAddress,
         normalizedOwner,
+        network,
         hasOwner: !!normalizedOwner,
     })
 
     const fetchDomains = useCallback(async () => {
-        console.log('[useEnsDomains] fetchDomains called', { normalizedOwner, hasOwner: !!normalizedOwner })
+        console.log('[useEnsDomains] fetchDomains called', { normalizedOwner, network, hasOwner: !!normalizedOwner })
 
         if (!normalizedOwner) {
             console.log('[useEnsDomains] No owner address, clearing domains')
@@ -75,9 +80,9 @@ export function useEnsDomains(ownerAddress: string | null | undefined) {
         }
 
         try {
-            console.log('[useEnsDomains] Fetching ENS domains for:', normalizedOwner)
+            console.log('[useEnsDomains] Fetching ENS domains for:', normalizedOwner, 'network:', network)
             setLoading(true)
-            const results = await fetchEnsDomains(normalizedOwner)
+            const results = await fetchEnsDomains(normalizedOwner, network)
             console.log('[useEnsDomains] Fetched domains:', results.length, results)
             setDomains(results)
             setError(null)
@@ -88,7 +93,7 @@ export function useEnsDomains(ownerAddress: string | null | undefined) {
         } finally {
             setLoading(false)
         }
-    }, [normalizedOwner])
+    }, [normalizedOwner, network])
 
     useEffect(() => {
         void fetchDomains()

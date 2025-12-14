@@ -130,7 +130,21 @@ export function ProjectCard({ project, onChange }: ProjectCardProps) {
                                 <Globe className="h-3.5 w-3.5" />
                                 <p className="text-xs font-medium">ENS Domain</p>
                             </div>
-                            <p className="text-sm font-semibold text-primary truncate">{project.ensName}</p>
+                            <div className="flex items-center justify-between gap-2">
+                                <p className="text-sm font-semibold text-primary truncate">{project.ensName}</p>
+                                {latestDeployment?.status === 'success' && (
+                                    <a
+                                        href={project.network === 'sepolia'
+                                            ? `https://${project.ensName}.s.raffy.eth.limo`
+                                            : `https://${project.ensName}.limo`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline underline-offset-2 shrink-0">
+                                        Visit
+                                        <ExternalLink className="h-3 w-3" />
+                                    </a>
+                                )}
+                            </div>
                         </div>
 
                         {/* Latest Deployment */}

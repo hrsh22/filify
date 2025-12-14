@@ -8,6 +8,7 @@ import { AuthProvider } from "./context/auth-context";
 import { ToastProvider } from "./context/toast-context";
 import { ErrorBoundary } from "./components/error-boundary";
 import { WalletProvider } from "./context/wallet-provider";
+import { NetworkProvider } from "./context/network-context";
 
 const root = document.getElementById("root");
 
@@ -18,16 +19,18 @@ if (!root) {
 createRoot(root).render(
     <StrictMode>
         <HashRouter>
-            <WalletProvider>
-                <AuthProvider>
-                    <ToastProvider>
-                        <ErrorBoundary>
-                            <App />
-                        </ErrorBoundary>
-                        <Toaster position="bottom-right" richColors />
-                    </ToastProvider>
-                </AuthProvider>
-            </WalletProvider>
+            <NetworkProvider>
+                <WalletProvider>
+                    <AuthProvider>
+                        <ToastProvider>
+                            <ErrorBoundary>
+                                <App />
+                            </ErrorBoundary>
+                            <Toaster position="bottom-right" richColors />
+                        </ToastProvider>
+                    </AuthProvider>
+                </WalletProvider>
+            </NetworkProvider>
         </HashRouter>
     </StrictMode>
 );

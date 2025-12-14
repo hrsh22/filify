@@ -1,11 +1,13 @@
 import type { Project } from '@/types'
 import { api } from './api'
+import type { Network } from '@/context/network-context'
 
 type CreateProjectPayload = {
   name: string
   repoName: string
   repoUrl: string
   repoBranch: string
+  network: Network
   ensName: string
   ensOwnerAddress: string
   ethereumRpcUrl?: string
@@ -14,13 +16,13 @@ type CreateProjectPayload = {
   frontendDir?: string
 }
 
-type UpdateProjectPayload = Partial<CreateProjectPayload> & {
+type UpdateProjectPayload = Partial<Omit<CreateProjectPayload, 'network'>> & {
   autoDeployBranch?: string
 }
 
 export const projectsService = {
-  async getAll() {
-    const { data } = await api.get<Project[]>('/projects')
+  async getAll(network: Network) {
+    const { data } = await api.get<Project[]>(`/projects?network=${network}`)
     return data
   },
   async getById(id: string) {
@@ -49,5 +51,3 @@ export const projectsService = {
     return data
   },
 }
-
-

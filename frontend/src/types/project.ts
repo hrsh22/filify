@@ -1,5 +1,7 @@
 import type { Deployment } from './deployment'
 
+export type Network = 'mainnet' | 'sepolia'
+
 export interface Project {
   id: string
   userId: string
@@ -8,6 +10,7 @@ export interface Project {
   repoUrl: string
   repoBranch: string
   autoDeployBranch: string
+  network: Network
   ensName: string
   ensOwnerAddress: string
   ethereumRpcUrl: string
@@ -23,5 +26,3 @@ export interface Project {
 export type ProjectListItem = Project & {
   deployments: Deployment[]
 }
-
-

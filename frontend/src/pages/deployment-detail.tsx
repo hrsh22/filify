@@ -96,9 +96,20 @@ export function DeploymentDetailPage() {
     const isAwaitingSignature = deployment.status === "awaiting_signature";
     const isAwaitingConfirmation = deployment.status === "awaiting_confirmation";
     const canSignEns = isAwaitingSignature && Boolean(walletClient && address);
+    const isSepolia = project?.network === 'sepolia';
     const ipfsUrl = deployment.ipfsCid ? `https://${deployment.ipfsCid}.ipfs.dweb.link` : null;
-    const ensUrl = project?.ensName ? `https://${project.ensName}.limo` : null;
-    const etherscanUrl = deployment.ensTxHash ? `https://etherscan.io/tx/${deployment.ensTxHash}` : null;
+    // Sepolia uses .s.raffy.eth.limo, mainnet uses .limo
+    const ensUrl = project?.ensName
+        ? isSepolia
+            ? `https://${project.ensName}.s.raffy.eth.limo`
+            : `https://${project.ensName}.limo`
+        : null;
+    // Sepolia uses sepolia.etherscan.io
+    const etherscanUrl = deployment.ensTxHash
+        ? isSepolia
+            ? `https://sepolia.etherscan.io/tx/${deployment.ensTxHash}`
+            : `https://etherscan.io/tx/${deployment.ensTxHash}`
+        : null;
     const isCancellable = CANCELLABLE_STATUSES.has(deployment.status);
 
     const handleRefresh = async () => {
