@@ -14,6 +14,7 @@ type CreateProjectPayload = {
   buildCommand?: string
   outputDir?: string
   frontendDir?: string
+  force?: boolean
 }
 
 type UpdateProjectPayload = Partial<Omit<CreateProjectPayload, 'network'>> & {

@@ -115,6 +115,7 @@ export class ProjectsController {
       buildCommand,
       outputDir,
       frontendDir,
+      force
     } = req.body;
 
     // Only normalize if ENS owner address is provided
@@ -131,9 +132,43 @@ export class ProjectsController {
       ensName: ensName || '(none)',
       ensOwnerAddress: normalizedOwnerAddress || '(none)',
       hasEns,
+      force,
     });
 
     try {
+      // Check for ENS conflict if ENS is provided
+      if (hasEns) {
+        const existingProject = await db.query.projects.findFirst({
+          where: eq(projects.ensName, ensName),
+        });
+
+        if (existingProject) {
+          if (!force) {
+            return res.status(409).json({
+              error: 'ENS_ALREADY_LINKED',
+              message: `This domain is already linked to project "${existingProject.name}"`,
+              existingProjectName: existingProject.name
+            });
+          }
+
+          // Force unlink from other project
+          await db
+            .update(projects)
+            .set({
+              ensName: null,
+              ensOwnerAddress: null,
+              ethereumRpcUrl: null,
+              updatedAt: new Date(),
+            })
+            .where(eq(projects.id, existingProject.id));
+
+          logger.info('Force unlinked ENS from other project during creation', {
+            ensName,
+            fromProjectId: existingProject.id,
+          });
+        }
+      }
+
       // Validate repository access
       const [owner, repo] = repoName.split('/');
       logger.debug('Validating repository access', { owner, repo, userId });

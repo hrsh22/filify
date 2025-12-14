@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Combobox } from "@/components/ui/combobox";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Info, ExternalLink, Code } from "lucide-react";
 import { useToast } from "@/context/toast-context";
@@ -29,7 +30,7 @@ const schema = z
         repoUrl: z.string().url(),
         repoBranch: z.string().min(1, "Branch is required"),
         framework: z.enum(["html", "nextjs", "vite", "nuxt"], { required_error: "Framework is required" }),
-        enableEns: z.boolean().default(false),
+        enableEns: z.boolean().default(true),
         ensName: z.string().optional(),
         ensOwnerAddress: z.string().optional(),
         buildCommand: z.string().optional(),
@@ -137,6 +138,7 @@ export function NewProjectForm() {
             repoUrl: "",
             repoBranch: "main",
             framework: "nextjs",
+            enableEns: true,
             ensName: "",
             ensOwnerAddress: "",
             buildCommand: undefined,
@@ -249,7 +251,12 @@ export function NewProjectForm() {
         }
     }, [selectedFramework, form]);
 
-    const onSubmit = async (values: FormValues) => {
+    // Conflict handling
+    const [isConflictDialogOpen, setIsConflictDialogOpen] = useState(false);
+    const [conflictProjectName, setConflictProjectName] = useState("");
+    const [pendingFormValues, setPendingFormValues] = useState<FormValues | null>(null);
+
+    const onSubmit = async (values: FormValues, force = false) => {
         try {
             const project = await projectsService.create({
                 name: values.name,
@@ -261,7 +268,8 @@ export function NewProjectForm() {
                 ensOwnerAddress: values.enableEns ? values.ensOwnerAddress : undefined,
                 buildCommand: values.buildCommand || undefined,
                 outputDir: values.outputDir || undefined,
-                frontendDir: values.frontendDir || undefined
+                frontendDir: values.frontendDir || undefined,
+                force
             });
 
             // Start deployment immediately
@@ -269,14 +277,23 @@ export function NewProjectForm() {
 
             showToast("Project created and deployment started!", "success");
             navigate(`/deployments/${deploymentId}`);
-        } catch (error) {
+        } catch (error: any) {
             console.error("[NewProjectForm]", error);
+
+            // Check for conflict error
+            if (error?.response?.data?.error === 'ENS_ALREADY_LINKED') {
+                setConflictProjectName(error.response.data.existingProjectName);
+                setPendingFormValues(values);
+                setIsConflictDialogOpen(true);
+                return;
+            }
+
             showToast("Failed to create project", "error");
         }
     };
 
     return (
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <form onSubmit={form.handleSubmit((values) => onSubmit(values, false))} className="space-y-6">
             {/* Framework Selection */}
             <Card>
                 <CardHeader>
@@ -627,24 +644,6 @@ export function NewProjectForm() {
                 <CardContent className="space-y-4">
                     {/* Option Cards */}
                     <div className="grid gap-3 sm:grid-cols-2">
-                        {/* IPFS Only Option */}
-                        <button
-                            type="button"
-                            onClick={() => form.setValue("enableEns", false)}
-                            className={`relative flex flex-col items-start gap-2 rounded-lg border-2 p-4 text-left transition-all hover:bg-secondary/50 ${!enableEns ? "border-primary bg-primary/5" : "border-muted"
-                                }`}
-                        >
-                            <div className="flex items-center gap-2">
-                                <div className={`h-4 w-4 rounded-full border-2 ${!enableEns ? "border-primary bg-primary" : "border-muted-foreground"}`}>
-                                    {!enableEns && <div className="h-full w-full flex items-center justify-center"><div className="h-1.5 w-1.5 rounded-full bg-background" /></div>}
-                                </div>
-                                <span className="font-semibold">IPFS Only</span>
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                                Access via IPFS gateway URL. You can add ENS later.
-                            </p>
-                        </button>
-
                         {/* With ENS Option */}
                         <button
                             type="button"
@@ -660,6 +659,24 @@ export function NewProjectForm() {
                             </div>
                             <p className="text-xs text-muted-foreground">
                                 Access via your .eth domain (e.g., yoursite.eth.limo)
+                            </p>
+                        </button>
+
+                        {/* IPFS Only Option */}
+                        <button
+                            type="button"
+                            onClick={() => form.setValue("enableEns", false)}
+                            className={`relative flex flex-col items-start gap-2 rounded-lg border-2 p-4 text-left transition-all hover:bg-secondary/50 ${!enableEns ? "border-primary bg-primary/5" : "border-muted"
+                                }`}
+                        >
+                            <div className="flex items-center gap-2">
+                                <div className={`h-4 w-4 rounded-full border-2 ${!enableEns ? "border-primary bg-primary" : "border-muted-foreground"}`}>
+                                    {!enableEns && <div className="h-full w-full flex items-center justify-center"><div className="h-1.5 w-1.5 rounded-full bg-background" /></div>}
+                                </div>
+                                <span className="font-semibold">IPFS Only</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                Access via IPFS gateway URL. You can add ENS later.
                             </p>
                         </button>
                     </div>
@@ -712,6 +729,36 @@ export function NewProjectForm() {
             <Button type="submit" size="lg" className="w-full" disabled={form.formState.isSubmitting || !canSubmit}>
                 {form.formState.isSubmitting ? "Creating & deploying..." : "Create & Deploy"}
             </Button>
+            {/* Conflict Alert Dialog */}
+            <AlertDialog open={isConflictDialogOpen} onOpenChange={setIsConflictDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Domain Already Linked</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            The domain <strong>{selectedEnsName}</strong> is currently linked to the project <strong>{conflictProjectName}</strong>.
+                            <br /><br />
+                            Do you want to unlink it from there and link it to this new project instead?
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => {
+                            setIsConflictDialogOpen(false);
+                            setPendingFormValues(null);
+                        }}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={(e) => {
+                                e.preventDefault();
+                                if (pendingFormValues) {
+                                    setIsConflictDialogOpen(false);
+                                    onSubmit(pendingFormValues, true);
+                                }
+                            }}
+                        >
+                            Confirm & Link
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </form >
     );
 }
