@@ -48,12 +48,12 @@ async function getSynapseClient() {
 }
 
 /**
- * Create a StorageContext using the configured dataset.
- * 
- * Uses FILECOIN_DATASET_ID and FILECOIN_PROVIDER_ID from env to reuse
- * a single dataset for all uploads.
+ * Create a StorageContext for a new dataset, selecting a random approved provider.
  */
-async function getStorageContext(synapse: any) {
+async function createStorageContextForNewDataSet(
+    synapse: any,
+    options: { providerId?: number } = {}
+) {
     const modules = await loadFilecoinPinModules();
 
     // Access internal WarmStorageService
@@ -65,21 +65,29 @@ async function getStorageContext(synapse: any) {
     const registryAddress = warmStorage.getServiceProviderRegistryAddress();
     const spRegistry = new modules.SPRegistryService(synapse.getProvider(), registryAddress);
 
-    const dataSetId = Number(env.FILECOIN_DATASET_ID);
-    const providerId = Number(env.FILECOIN_PROVIDER_ID);
+    let providerInfo = null;
 
-    logger.info('Using configured Filecoin dataset', { dataSetId, providerId });
+    if (options.providerId != null) {
+        providerInfo = await spRegistry.getProvider(options.providerId);
+    } else {
+        // Get all approved provider ids and randomly select one
+        const approvedProviderIds = await warmStorage.getApprovedProviderIds();
+        if (approvedProviderIds.length === 0) {
+            throw new Error('No approved storage providers available for upload');
+        }
+        const randomProviderId = approvedProviderIds[Math.floor(Math.random() * approvedProviderIds.length)];
+        providerInfo = await spRegistry.getProvider(randomProviderId);
+    }
 
-    const providerInfo = await spRegistry.getProvider(providerId);
     if (providerInfo == null) {
-        throw new Error(`Storage provider ${providerId} not found or not approved`);
+        throw new Error('Unable to resolve an approved storage provider');
     }
 
     const storageContext = new modules.StorageContext(
         synapse,
         warmStorage,
         providerInfo,
-        dataSetId,
+        undefined,
         { ...modules.DEFAULT_STORAGE_CONTEXT_CONFIG, metadata: { ...modules.DEFAULT_DATA_SET_METADATA } },
         { ...modules.DEFAULT_DATA_SET_METADATA }
     );
@@ -140,13 +148,12 @@ class FilecoinUploadService {
             logger.info('Upload readiness check passed', { deploymentId, status: readinessCheck.status });
             updateProgress({ status: 'checking-readiness', progress: 50, message: 'Readiness check passed' });
 
-            // Get storage context for configured dataset
-            const { storage: storageContext, providerInfo } = await getStorageContext(synapse);
+            // Create storage context
+            const { storage: storageContext, providerInfo } = await createStorageContextForNewDataSet(synapse);
             logger.info('Storage context created', {
                 deploymentId,
                 providerId: providerInfo.id,
                 providerName: providerInfo.name,
-                dataSetId: Number(env.FILECOIN_DATASET_ID),
             });
 
             updateProgress({ status: 'uploading', progress: 60, message: 'Starting upload to Filecoin SP' });

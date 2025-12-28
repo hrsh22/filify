@@ -36,10 +36,6 @@ const envSchema = z.object({
   FILECOIN_PRIVATE_KEY: z.string().regex(/^0x[a-fA-F0-9]{64}$/, 'Must be a valid private key'),
   FILECOIN_RPC_URL: z.string().url().optional(),
   WARM_STORAGE_ADDRESS: z.string().optional(),
-  
-  // Filecoin Dataset (all uploads go to this dataset)
-  FILECOIN_DATASET_ID: z.string().regex(/^\d+$/, 'Must be a numeric dataset ID'),
-  FILECOIN_PROVIDER_ID: z.string().regex(/^\d+$/, 'Must be a numeric provider ID'),
 });
 
 export const env = envSchema.parse(process.env);
