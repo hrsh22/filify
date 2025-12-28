@@ -31,6 +31,11 @@ router.post(
     (req, res) => deploymentsController.confirmENS(req, res)
 );
 router.post(
+    '/:id/ens/skip',
+    isAuthenticated,
+    (req, res) => deploymentsController.skipENS(req, res)
+);
+router.post(
     '/:id/upload/fail',
     isAuthenticated,
     validateRequest(uploadFailureSchema),

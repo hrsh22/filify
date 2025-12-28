@@ -41,7 +41,7 @@ const schema = z
         (data) => {
             // If ENS is enabled, ensName and ensOwnerAddress are required
             if (data.enableEns) {
-                return !!data.ensName && /^[a-z0-9-]+\.eth$/.test(data.ensName);
+                return !!data.ensName && /^[a-z0-9-]+(\.[a-z0-9-]+)*\.eth$/.test(data.ensName);
             }
             return true;
         },

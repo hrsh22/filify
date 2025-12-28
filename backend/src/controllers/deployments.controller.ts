@@ -264,7 +264,7 @@ export class DeploymentsController {
                 });
             }
 
-            if (!['pending_upload', 'uploading', 'awaiting_signature'].includes(deployment.status)) {
+            if (!['pending_upload', 'uploading', 'awaiting_signature', 'success'].includes(deployment.status)) {
                 return res.status(400).json({
                     error: 'InvalidState',
                     message: 'Deployment is not ready for ENS preparation.',
@@ -278,14 +278,18 @@ export class DeploymentsController {
                 deployment.project.ethereumRpcUrl
             );
 
-            await db
-                .update(deployments)
-                .set({
-                    ipfsCid,
-                    status: 'awaiting_signature',
-                    buildArtifactsPath: null,
-                })
-                .where(eq(deployments.id, id));
+            // Only update status if not already successful (to avoid triggering auto-deploy poller)
+            // For successful deployments, we're just preparing ENS for a deployment that skipped ENS
+            if (deployment.status !== 'success') {
+                await db
+                    .update(deployments)
+                    .set({
+                        ipfsCid,
+                        status: 'awaiting_signature',
+                        buildArtifactsPath: null,
+                    })
+                    .where(eq(deployments.id, id));
+            }
 
             logger.info('ENS transaction prepared and awaiting signature', {
                 deploymentId: id,
@@ -341,7 +345,7 @@ export class DeploymentsController {
                 });
             }
 
-            if (!['awaiting_signature', 'awaiting_confirmation'].includes(deployment.status)) {
+            if (!['awaiting_signature', 'awaiting_confirmation', 'success'].includes(deployment.status)) {
                 return res.status(400).json({
                     error: 'InvalidState',
                     message: 'Deployment is not awaiting ENS confirmation.',
@@ -981,6 +985,73 @@ export class DeploymentsController {
                     logger.warn('Failed to cleanup build directory after build failure', { deploymentId, error: cleanupError });
                 });
             }
+        }
+    }
+
+    /**
+     * Skip ENS update and mark deployment as successful
+     * POST /api/deployments/:id/ens/skip
+     * 
+     * When a deployment is awaiting_signature, the user can skip the ENS update
+     * and mark the deployment as successful (IPFS upload completed).
+     */
+    async skipENS(req: Request, res: Response) {
+        const { id } = req.params;
+        const userId = (req.user as any).id;
+
+        logger.info('Skipping ENS update for deployment', { deploymentId: id, userId });
+
+        try {
+            const deployment = await db.query.deployments.findFirst({
+                where: eq(deployments.id, id),
+                with: {
+                    project: true,
+                },
+            });
+
+            if (!deployment || deployment.project.userId !== userId) {
+                return res.status(404).json({
+                    error: 'NotFound',
+                    message: 'Deployment not found',
+                });
+            }
+
+            if (deployment.status !== 'awaiting_signature') {
+                return res.status(400).json({
+                    error: 'InvalidState',
+                    message: 'Only deployments awaiting ENS signature can skip ENS.',
+                });
+            }
+
+            await db
+                .update(deployments)
+                .set({
+                    status: 'success',
+                    buildArtifactsPath: null,
+                    completedAt: new Date(),
+                })
+                .where(eq(deployments.id, id));
+
+            // Cleanup build directory if enabled
+            if (env.CLEANUP_BUILDS_ON_COMPLETE) {
+                await buildService.cleanupDeploymentBuild(id).catch((error) => {
+                    logger.warn('Failed to cleanup build directory after ENS skip', { deploymentId: id, error });
+                });
+            }
+
+            logger.info('ENS update skipped, deployment marked as success', { deploymentId: id });
+
+            res.json({
+                status: 'success',
+                message: 'Deployment completed without ENS update',
+            });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to skip ENS';
+            logger.error('Failed to skip ENS:', error);
+            res.status(500).json({
+                error: 'SkipENSFailed',
+                message,
+            });
         }
     }
 

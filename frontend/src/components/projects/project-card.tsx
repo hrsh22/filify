@@ -134,7 +134,7 @@ export function ProjectCard({ project, onChange }: ProjectCardProps) {
                                 {project.ensName ? (
                                     <>
                                         <p className="text-sm font-semibold text-primary truncate">{project.ensName}</p>
-                                        {latestDeployment?.status === 'success' && (
+                                        {latestDeployment?.status === 'success' && latestDeployment.ensTxHash && (
                                             <a
                                                 href={project.network === 'sepolia'
                                                     ? `https://${project.ensName}.s.raffy.eth.limo`

@@ -65,6 +65,7 @@ export function ProjectDetailPage() {
     // Conflict handling
     const [isConflictDialogOpen, setIsConflictDialogOpen] = useState(false);
     const [conflictProjectName, setConflictProjectName] = useState("");
+    const [isDeployingToEns, setIsDeployingToEns] = useState(false);
 
     const ensOptions = useMemo(() =>
         ensDomains.map(d => ({ value: d.name, label: d.name })),
@@ -140,6 +141,50 @@ export function ProjectDetailPage() {
             showToast("Failed to remove ENS domain", "error");
         } finally {
             setEnsRemoveLoading(false);
+        }
+    };
+
+    const handleDeployToEns = async () => {
+        if (!project || !walletClient || !address) return;
+        
+        const deployment = project.deployments?.find(d => d.status === 'success' && d.ipfsCid && !d.ensTxHash);
+        if (!deployment || !deployment.ipfsCid) {
+            showToast("No deployment available for ENS update", "error");
+            return;
+        }
+
+        try {
+            setIsDeployingToEns(true);
+
+            // 1. Prepare ENS transaction
+            const prepareResponse = await deploymentsService.prepareEns(deployment.id, deployment.ipfsCid);
+
+            // 2. Request wallet signature
+            const txHash = await walletClient.sendTransaction({
+                account: address as `0x${string}`,
+                to: prepareResponse.payload.resolverAddress as `0x${string}`,
+                data: prepareResponse.payload.data as `0x${string}`,
+            });
+
+            showToast("Transaction broadcasted! Waiting for confirmation...", "info");
+
+            // 3. Confirm with backend
+            await deploymentsService.confirmEns(deployment.id, txHash);
+
+            showToast("ENS domain updated successfully!", "success");
+            await refresh();
+        } catch (error: any) {
+            console.error("[ProjectDetail][deployToEns]", error);
+            
+            // Check if user rejected
+            const message = error?.message?.toLowerCase() ?? "";
+            if (message.includes("user rejected") || message.includes("user denied") || error?.code === 4001) {
+                showToast("Transaction cancelled", "info");
+            } else {
+                showToast("Failed to update ENS", "error");
+            }
+        } finally {
+            setIsDeployingToEns(false);
         }
     };
 
@@ -314,19 +359,33 @@ export function ProjectDetailPage() {
                                 {project.ensName ? (
                                     <>
                                         <p className="text-lg font-semibold text-primary truncate">{project.ensName}</p>
-                                        <div className="flex gap-2">
-                                            <a
-                                                href={project.network === 'sepolia'
-                                                    ? `https://${project.ensName}.s.raffy.eth.limo`
-                                                    : `https://${project.ensName}.limo`}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="text-xs text-muted-foreground hover:text-foreground hover:underline underline-offset-2 flex items-center gap-1">
-                                                Visit <ExternalLink className="h-3 w-3" />
-                                            </a>
+                                        <div className="flex gap-2 flex-wrap">
+                                            {latestDeployment?.ensTxHash ? (
+                                                <a
+                                                    href={project.network === 'sepolia'
+                                                        ? `https://${project.ensName}.s.raffy.eth.limo`
+                                                        : `https://${project.ensName}.limo`}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    className="text-xs text-muted-foreground hover:text-foreground hover:underline underline-offset-2 flex items-center gap-1 cursor-pointer">
+                                                    Visit <ExternalLink className="h-3 w-3" />
+                                                </a>
+                                            ) : (
+                                                <>
+                                                    <span className="text-xs text-muted-foreground">Not yet deployed to ENS</span>
+                                                    {latestDeployment?.ipfsCid && latestDeployment?.status === 'success' && (
+                                                        <button
+                                                            onClick={handleDeployToEns}
+                                                            disabled={isDeployingToEns || !walletClient}
+                                                            className="text-xs text-primary hover:underline underline-offset-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                                                            {isDeployingToEns ? "Signing..." : "Deploy now"}
+                                                        </button>
+                                                    )}
+                                                </>
+                                            )}
                                             <button
                                                 onClick={() => setIsRemoveEnsOpen(true)}
-                                                className="text-xs text-destructive hover:underline underline-offset-2">
+                                                className="text-xs text-destructive hover:underline underline-offset-2 cursor-pointer">
                                                 Remove
                                             </button>
                                         </div>

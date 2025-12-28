@@ -171,8 +171,8 @@ export function useAutoDeployPoller(enabled = true) {
         })
 
         if (isRejection) {
-          // User rejected/cancelled the signature - cancel the deployment
-          console.warn('[AutoDeployPoller] ENS signature rejected/cancelled, cancelling deployment', {
+          // User rejected/cancelled the signature - skip ENS and mark as complete
+          console.warn('[AutoDeployPoller] ENS signature rejected/cancelled, completing without ENS', {
             deploymentId: deployment.id
           })
 
@@ -180,15 +180,15 @@ export function useAutoDeployPoller(enabled = true) {
           cancelledRef.current.add(deployment.id)
 
           try {
-            await deploymentsService.cancel(deployment.id)
-            showToast('Deployment cancelled', 'info')
-            console.log('[AutoDeployPoller] Deployment cancelled after signature rejection', {
+            await deploymentsService.skipEns(deployment.id)
+            showToast('Deployment completed without ENS update', 'success')
+            console.log('[AutoDeployPoller] Deployment completed without ENS after signature rejection', {
               deploymentId: deployment.id
             })
-          } catch (cancelError) {
-            console.error('[AutoDeployPoller] Failed to cancel deployment', cancelError)
-            showToast('Failed to cancel deployment', 'error')
-            // Remove from cancelled set if cancel failed so user can retry
+          } catch (skipError) {
+            console.error('[AutoDeployPoller] Failed to skip ENS', skipError)
+            showToast('Failed to complete deployment', 'error')
+            // Remove from cancelled set if skip failed so user can retry
             cancelledRef.current.delete(deployment.id)
           }
           return

@@ -47,9 +47,25 @@ export function DeploymentDetailPage() {
     const [cancelling, setCancelling] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [signingEns, setSigningEns] = useState(false);
+    const [skippingEns, setSkippingEns] = useState(false);
     const { address } = useAppKitAccount();
     const { data: walletClient } = useWalletClient();
     useAutoDeployPoller(true);
+
+    const handleSkipEns = async () => {
+        if (!deployment) return;
+        try {
+            setSkippingEns(true);
+            await deploymentsService.skipEns(deployment.id);
+            showToast("Deployment completed without ENS update", "success");
+            await refresh();
+        } catch (err) {
+            console.error("[DeploymentDetail][skipEns]", err);
+            showToast("Failed to skip ENS", "error");
+        } finally {
+            setSkippingEns(false);
+        }
+    };
 
     const handleCancel = async () => {
         if (!deploymentId) return;
@@ -98,8 +114,8 @@ export function DeploymentDetailPage() {
     const canSignEns = isAwaitingSignature && Boolean(walletClient && address);
     const isSepolia = project?.network === 'sepolia';
     const ipfsUrl = deployment.ipfsCid ? `https://${deployment.ipfsCid}.ipfs.dweb.link` : null;
-    // Sepolia uses .s.raffy.eth.limo, mainnet uses .limo
-    const ensUrl = project?.ensName
+    // Only show ENS URL if this deployment actually updated ENS (has tx hash)
+    const ensUrl = (project?.ensName && deployment.ensTxHash)
         ? isSepolia
             ? `https://${project.ensName}.s.raffy.eth.limo`
             : `https://${project.ensName}.limo`
@@ -151,7 +167,15 @@ export function DeploymentDetailPage() {
             await refresh();
         } catch (err) {
             if (isUserRejectedRequest(err)) {
-                showToast("ENS signature request rejected", "info");
+                // User rejected the transaction - automatically skip ENS and complete deployment
+                try {
+                    await deploymentsService.skipEns(deployment.id);
+                    showToast("Deployment completed without ENS update", "success");
+                    await refresh();
+                } catch (skipErr) {
+                    console.error("[DeploymentDetail][skipEns after rejection]", skipErr);
+                    showToast("Failed to complete deployment", "error");
+                }
             } else {
                 console.error("[DeploymentDetail][signEns]", err);
                 // Silently fail - no error toast
@@ -218,9 +242,19 @@ export function DeploymentDetailPage() {
                             <AlertDescription className="space-y-3">
                                 <p className="font-semibold">ENS Signature Required</p>
                                 <p className="text-sm">Your wallet needs to publish the latest IPFS CID to ENS.</p>
-                                <Button onClick={handleSignEns} disabled={!canSignEns || signingEns} size="sm">
-                                    {signingEns ? "Waiting for wallet…" : "Sign ENS update"}
-                                </Button>
+                                <div className="flex items-center gap-2">
+                                    <Button onClick={handleSignEns} disabled={!canSignEns || signingEns || skippingEns} size="sm">
+                                        {signingEns ? "Waiting for wallet…" : "Sign ENS update"}
+                                    </Button>
+                                    <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        onClick={handleSkipEns} 
+                                        disabled={signingEns || skippingEns}
+                                    >
+                                        {skippingEns ? "Skipping…" : "Skip ENS"}
+                                    </Button>
+                                </div>
                                 {!canSignEns && <p className="text-xs text-muted-foreground">Connect your wallet to sign this ENS transaction.</p>}
                             </AlertDescription>
                         </Alert>

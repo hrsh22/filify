@@ -51,6 +51,10 @@ export const deploymentsService = {
     const { data } = await api.post<{ status: string; killed: boolean }>(`/deployments/${id}/cancel`)
     return data
   },
+  async skipEns(id: string) {
+    const { data } = await api.post<{ status: string; message: string }>(`/deployments/${id}/ens/skip`)
+    return data
+  },
 }
 
 

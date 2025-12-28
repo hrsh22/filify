@@ -110,6 +110,16 @@ This document lists all required and optional environment variables for the back
     - Only needed for non-standard deployments
     - Example: `WARM_STORAGE_ADDRESS=0x...`
 
+- **`FILECOIN_DATASET_ID`** (required)
+    - Filecoin dataset ID for all uploads
+    - All deployments upload to this single dataset
+    - Example: `FILECOIN_DATASET_ID=6825`
+
+- **`FILECOIN_PROVIDER_ID`** (required)
+    - Storage provider ID for the dataset
+    - Must match the provider that hosts the dataset
+    - Example: `FILECOIN_PROVIDER_ID=11`
+
 ## Example .env File
 
 ```env

@@ -497,7 +497,7 @@ export class ProjectsController {
 
     try {
       // Validate inputs
-      if (!ensName || !/^[a-z0-9-]+\.eth$/.test(ensName)) {
+      if (!ensName || !/^[a-z0-9-]+(\.[a-z0-9-]+)*\.eth$/.test(ensName)) {
         return res.status(400).json({ error: 'Invalid ENS name format' });
       }
       if (!ensOwnerAddress || !/^0x[a-fA-F0-9]{40}$/.test(ensOwnerAddress)) {

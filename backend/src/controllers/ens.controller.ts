@@ -229,13 +229,54 @@ class EnsController {
 
         const uniqueDomains = Array.from(domainMap.values());
 
+        // Build a map of 2LD (second-level domain) -> expiryTimestamp
+        // e.g., "harshgupta.eth" -> 1234567890
+        // This is used to determine expiry for subnames that don't have their own expiry
+        const twoLDExpiryMap = new Map<string, number>();
+
+        for (const domain of uniqueDomains) {
+            const parts = domain.name.split('.');
+            // 2LD has exactly 2 parts: ["harshgupta", "eth"]
+            if (parts.length === 2 && domain.expiryDate) {
+                twoLDExpiryMap.set(domain.name, Number(domain.expiryDate));
+            }
+        }
+
+        // Helper to extract 2LD from any domain name
+        // e.g., "next.harshgupta.eth" -> "harshgupta.eth"
+        // e.g., "a.b.harshgupta.eth" -> "harshgupta.eth"
+        const getTwoLD = (name: string): string => {
+            const parts = name.split('.');
+            return parts.slice(-2).join('.');
+        };
+
+        // Helper to get effective expiry for a domain
+        // For 2LDs: use their own expiry
+        // For subnames: use their parent 2LD's expiry
+        const getEffectiveExpiry = (domain: RawDomain): number | null => {
+            if (domain.expiryDate) {
+                return Number(domain.expiryDate);
+            }
+            // For subnames without expiry, look up the 2LD's expiry
+            const twoLD = getTwoLD(domain.name);
+            return twoLDExpiryMap.get(twoLD) ?? null;
+        };
+
+        const nowSeconds = Math.floor(Date.now() / 1000);
+
         return uniqueDomains
+            .filter((domain) => {
+                const effectiveExpiry = getEffectiveExpiry(domain);
+                // If no expiry found (shouldn't happen for valid domains), keep it
+                if (effectiveExpiry === null) return true;
+                return effectiveExpiry > nowSeconds;
+            })
             .map((domain) => {
-                const expiryTimestamp = domain.expiryDate ? Number(domain.expiryDate) : null;
+                const effectiveExpiry = getEffectiveExpiry(domain);
                 return {
                     name: domain.name,
                     label: domain.labelName,
-                    expiry: expiryTimestamp ? new Date(expiryTimestamp * 1000).toISOString() : null,
+                    expiry: effectiveExpiry ? new Date(effectiveExpiry * 1000).toISOString() : null,
                 };
             })
             .sort((a, b) => a.name.localeCompare(b.name));
