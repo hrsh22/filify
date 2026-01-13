@@ -83,13 +83,15 @@ export interface EnsDomain {
     expiry?: string | null; // ISO date string
 }
 
+interface CacheEntry {
+    domains: EnsDomain[];
+    timestamp: number;
+}
+
+const CACHE_TTL_MS = 60 * 1000; // 1 minute cache
+const ensDomainsCache = new Map<string, CacheEntry>();
+
 class EnsController {
-    /**
-     * GET /api/ens/domains/:address
-     * Fetch ENS domains owned by an address via The Graph subgraph
-     * Query params:
-     *   - network: 'mainnet' | 'sepolia' (default: 'mainnet')
-     */
     async getDomains(req: Request, res: Response) {
         const { address } = req.params;
         const networkParam = req.query.network as string | undefined;
@@ -101,16 +103,28 @@ class EnsController {
         }
 
         const normalizedAddress = address.toLowerCase();
+        const cacheKey = `${network}:${normalizedAddress}`;
+        
+        const cached = ensDomainsCache.get(cacheKey);
+        if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+            logger.debug('Returning cached ENS domains', { address: normalizedAddress, network });
+            return res.json({ domains: cached.domains });
+        }
 
         try {
             logger.info('Fetching ENS domains', { address: normalizedAddress, network });
 
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+            };
+            
+            if (networkConfig.ensSubgraphUrl.includes('gateway.thegraph.com')) {
+                headers['Authorization'] = `Bearer ${env.THEGRAPH_API_KEY}`;
+            }
+
             const response = await fetch(networkConfig.ensSubgraphUrl, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${env.THEGRAPH_API_KEY}`,
-                },
+                headers,
                 body: JSON.stringify({
                     query: ENS_DOMAINS_QUERY,
                     variables: {
@@ -137,6 +151,8 @@ class EnsController {
             }
 
             const domains = this.processEnsDomains(json.data, normalizedAddress);
+            
+            ensDomainsCache.set(cacheKey, { domains, timestamp: Date.now() });
 
             logger.info('Found ENS domains', { address: normalizedAddress, count: domains.length });
 

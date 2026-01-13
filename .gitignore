@@ -32,5 +32,3 @@ next-env.d.ts
 .env.local
 temp
 builds
-
-AGENTS.md

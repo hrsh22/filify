@@ -1,4 +1,4 @@
-import type { BranchSummary, RepositorySummary } from '@/types'
+import type { BranchSummary, RepositorySummary, GitHubInstallation } from '@/types'
 import { api } from './api'
 
 export const repositoriesService = {
@@ -6,14 +6,24 @@ export const repositoriesService = {
     const { data } = await api.get<RepositorySummary[]>('/repositories')
     return data
   },
-  async getBranches(fullName: string) {
+
+  async getBranches(installationId: string, fullName: string) {
     const [owner, repo] = fullName.split('/')
     if (!owner || !repo) {
       throw new Error('Invalid repository name')
     }
-    const { data } = await api.get<BranchSummary[]>(`/repositories/${owner}/${repo}/branches`)
+    const { data } = await api.get<BranchSummary[]>(
+      `/repositories/${installationId}/${owner}/${repo}/branches`
+    )
     return data
   },
+
+  async getInstallations() {
+    const { data } = await api.get<GitHubInstallation[]>('/github/installations')
+    return data
+  },
+
+  async removeInstallation(installationId: string) {
+    await api.delete(`/github/installations/${installationId}`)
+  },
 }
-
-

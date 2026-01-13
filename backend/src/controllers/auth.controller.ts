@@ -1,148 +1,215 @@
 import { Request, Response } from 'express';
-import passport from 'passport';
+import { SiweMessage, generateNonce } from 'siwe';
+import { db } from '../db';
+import { users } from '../db/schema';
+import { eq } from 'drizzle-orm';
 import { logger } from '../utils/logger';
-import { env } from '../config/env';
 
 export class AuthController {
-  async githubAuth(req: Request, res: Response) {
-    logger.info('GitHub OAuth initiated', {
+  async getNonce(req: Request, res: Response) {
+    const nonce = generateNonce();
+    req.session.nonce = nonce;
+
+    logger.debug('SIWE nonce generated', {
       ip: req.ip,
-      userAgent: req.get('user-agent'),
+      nonce: nonce.substring(0, 8) + '...',
     });
-    passport.authenticate('github', { scope: ['user:email', 'repo'] })(req, res);
+
+    res.json({ nonce });
   }
 
-  async githubCallback(req: Request, res: Response) {
-    logger.debug('GitHub OAuth callback received');
-    passport.authenticate('github', (err: Error | null, user: Express.User | false) => {
-      if (err) {
-        logger.error('GitHub OAuth error:', {
-          error: err.message,
-          stack: err.stack,
+  async verify(req: Request, res: Response) {
+    const { message, signature } = req.body;
+
+    if (!message || !signature) {
+      return res.status(400).json({
+        error: 'BadRequest',
+        message: 'Message and signature are required',
+      });
+    }
+
+    if (!req.session.nonce) {
+      return res.status(400).json({
+        error: 'BadRequest',
+        message: 'No nonce found in session. Call /auth/nonce first.',
+      });
+    }
+
+    try {
+      const siweMessage = new SiweMessage(message);
+      
+      logger.info('[SIWE Verification] Attempting verification', {
+        messageAddress: siweMessage.address?.substring(0, 10) + '...',
+        messageChainId: siweMessage.chainId,
+        messageNonce: siweMessage.nonce,
+        sessionNonce: req.session.nonce?.substring(0, 8) + '...',
+        noncesMatch: siweMessage.nonce === req.session.nonce,
+      });
+
+      const verifiedMessage = await siweMessage.verify({
+        signature,
+        nonce: req.session.nonce,
+      });
+
+      if (!verifiedMessage.success) {
+        logger.error('[SIWE Verification] Verification returned failure', {
+          error: verifiedMessage.error?.type,
+          errorMessage: (verifiedMessage.error as any)?.expected 
+            ? `Expected: ${(verifiedMessage.error as any).expected}, Received: ${(verifiedMessage.error as any).received}`
+            : String(verifiedMessage.error),
           ip: req.ip,
         });
-        return res.redirect(`${env.FRONTEND_URL}/#/auth/error?message=${encodeURIComponent(err.message)}`);
+        return res.status(401).json({
+          error: 'Unauthorized',
+          message: `Verification failed: ${verifiedMessage.error?.type || 'Unknown error'}`,
+        });
       }
+
+      const walletAddress = verifiedMessage.data.address.toLowerCase();
+
+      logger.info('[SIWE Verification] Decoded message from SIWE', {
+        message: message.substring(0, 100) + '...',
+        address: siweMessage.address.substring(0, 10) + '...',
+        chainId: siweMessage.chainId,
+        nonce: siweMessage.nonce,
+      });
+
+      let user = await db.query.users.findFirst({
+        where: eq(users.walletAddress, walletAddress),
+      });
 
       if (!user) {
-        logger.warn('GitHub OAuth callback: user not found', {
-          ip: req.ip,
-        });
-        return res.redirect(`${env.FRONTEND_URL}/#/auth/error?message=Authentication failed`);
+        const now = new Date();
+        const [newUser] = await db
+          .insert(users)
+          .values({
+            walletAddress,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .returning();
+        user = newUser;
+        logger.info('New user created via SIWE', { walletAddress });
+      } else {
+        logger.info('Existing user authenticated via SIWE', { walletAddress });
       }
 
-      req.logIn(user, (loginErr) => {
-        if (loginErr) {
-          logger.error('Login error:', {
-            error: loginErr.message,
-            stack: loginErr.stack,
-            userId: user.id,
-          });
-          return res.redirect(`${env.FRONTEND_URL}/#/auth/error?message=${encodeURIComponent(loginErr.message)}`);
-        }
+      req.session.siwe = {
+        address: walletAddress,
+        chainId: verifiedMessage.data.chainId,
+      };
+      delete req.session.nonce;
 
-        logger.info('User authenticated successfully', {
-          userId: user.id,
-          githubUsername: user.githubUsername,
-          ip: req.ip,
-        });
-        // Redirect to frontend with success
-        return res.redirect(`${env.FRONTEND_URL}/#/auth/success`);
+      logger.info('[SIWE Verification] Success', {
+        walletAddress,
+        chainId: verifiedMessage.data.chainId,
+        ip: req.ip,
       });
-    })(req, res);
+
+      res.json({
+        walletAddress: user.walletAddress,
+        ensName: user.ensName,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      });
+    } catch (error) {
+      const err = error as Error;
+      logger.error('[SIWE Verification] Failed', {
+        errorName: err.name,
+        errorMessage: err.message,
+        errorStack: err.stack?.split('\n').slice(0, 3).join('\n'),
+        ip: req.ip,
+      });
+
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Invalid signature',
+      });
+    }
   }
 
   async getUser(req: Request, res: Response) {
-    if (!req.user) {
-      logger.debug('Get user request: not authenticated', {
-        ip: req.ip,
-      });
+    if (!req.session.siwe?.address) {
+      logger.debug('Get user request: not authenticated', { ip: req.ip });
       return res.status(401).json({
         error: 'Unauthorized',
         message: 'Not authenticated',
       });
     }
 
-    logger.debug('Get user request', {
-      userId: req.user.id,
-      githubUsername: req.user.githubUsername,
+    const user = await db.query.users.findFirst({
+      where: eq(users.walletAddress, req.session.siwe.address),
     });
 
-    // Don't expose sensitive data
-    const user = req.user;
+    if (!user) {
+      logger.warn('Session user not found in database', {
+        walletAddress: req.session.siwe.address,
+      });
+      req.session.destroy(() => {});
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'User not found',
+      });
+    }
+
+    logger.debug('Get user request', { walletAddress: user.walletAddress });
+
     res.json({
-      id: user.id,
-      githubId: user.githubId,
-      githubUsername: user.githubUsername,
-      githubEmail: user.githubEmail,
-      avatarUrl: user.avatarUrl,
+      walletAddress: user.walletAddress,
+      ensName: user.ensName,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     });
   }
 
   async logout(req: Request, res: Response) {
-    const userId = (req.user as any)?.id;
-    logger.info('User logout initiated', {
-      userId,
-      ip: req.ip,
-    });
+    const walletAddress = req.session.siwe?.address;
+    logger.info('User logout initiated', { walletAddress, ip: req.ip });
 
-    req.logout((err) => {
+    req.session.destroy((err) => {
       if (err) {
-        logger.error('Logout error:', {
+        logger.error('Session destroy error', {
           error: err.message,
-          stack: err.stack,
-          userId,
+          walletAddress,
         });
         return res.status(500).json({
-          error: 'Internal Server Error',
+          error: 'InternalServerError',
           message: 'Failed to logout',
         });
       }
 
-      req.session.destroy((sessionErr) => {
-        if (sessionErr) {
-          logger.error('Session destroy error:', {
-            error: sessionErr.message,
-            stack: sessionErr.stack,
-            userId,
-          });
-          return res.status(500).json({
-            error: 'Internal Server Error',
-            message: 'Failed to destroy session',
-          });
-        }
-
-        logger.info('User logged out successfully', {
-          userId,
-        });
-        res.clearCookie('connect.sid');
-        res.json({ message: 'Logged out successfully' });
-      });
+      logger.info('User logged out successfully', { walletAddress });
+      res.clearCookie('connect.sid');
+      res.json({ message: 'Logged out successfully' });
     });
   }
 
   async getStatus(req: Request, res: Response) {
-    const authenticated = req.isAuthenticated();
+    const authenticated = !!req.session.siwe?.address;
     logger.debug('Auth status check', {
       authenticated,
-      userId: req.user?.id || null,
+      walletAddress: req.session.siwe?.address || null,
       ip: req.ip,
     });
 
+    if (!authenticated) {
+      return res.json({ authenticated: false, user: null });
+    }
+
+    const user = await db.query.users.findFirst({
+      where: eq(users.walletAddress, req.session.siwe!.address),
+    });
+
     res.json({
-      authenticated,
-      user: req.user
+      authenticated: true,
+      user: user
         ? {
-          id: req.user.id,
-          githubUsername: req.user.githubUsername,
-          avatarUrl: req.user.avatarUrl,
-        }
+            walletAddress: user.walletAddress,
+            ensName: user.ensName,
+          }
         : null,
     });
   }
 }
 
 export const authController = new AuthController();
-

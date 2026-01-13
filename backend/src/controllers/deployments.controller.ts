@@ -67,7 +67,7 @@ export class DeploymentsController {
     // Create new deployment (start build process)
     async create(req: Request, res: Response) {
         const { projectId } = req.body;
-        const userId = (req.user as any).id;
+        const userId = req.userId!;
 
         logger.info('Creating new deployment', {
             projectId,
@@ -78,7 +78,7 @@ export class DeploymentsController {
             // Verify user owns project
             const project = await db.query.projects.findFirst({
                 where: eq(projects.id, projectId),
-                with: { user: true },
+                with: { user: true, installation: true },
             });
 
             if (!project || project.userId !== userId) {
@@ -89,6 +89,17 @@ export class DeploymentsController {
                 return res.status(403).json({
                     error: 'Forbidden',
                     message: 'You do not have access to this project',
+                });
+            }
+
+            if (!project.installation) {
+                logger.warn('Deployment creation denied: no GitHub installation linked', {
+                    projectId,
+                    userId,
+                });
+                return res.status(400).json({
+                    error: 'NoGitHubInstallation',
+                    message: 'This project has no GitHub App installation linked. Please reconnect GitHub.',
                 });
             }
 
@@ -140,7 +151,7 @@ export class DeploymentsController {
             });
 
             deploymentQueue.enqueue(projectId, () =>
-                this.runBuildPipeline(deploymentId, project)
+                this.runBuildPipeline(deploymentId, project, project.installation.installationId)
             );
 
             logger.info('Deployment created and queued', {
@@ -165,7 +176,7 @@ export class DeploymentsController {
 
     async cancel(req: Request, res: Response) {
         const { id } = req.params;
-        const userId = (req.user as any).id;
+        const userId = req.userId!;
 
         logger.info('Cancelling deployment', { deploymentId: id, userId });
 
@@ -232,7 +243,7 @@ export class DeploymentsController {
     async prepareENS(req: Request, res: Response) {
         const { id } = req.params;
         const { ipfsCid } = req.body;
-        const userId = (req.user as any).id;
+        const userId = req.userId!;
 
         logger.info('Preparing ENS transaction', {
             deploymentId: id,
@@ -313,7 +324,7 @@ export class DeploymentsController {
     async confirmENS(req: Request, res: Response) {
         const { id } = req.params;
         const { txHash } = req.body;
-        const userId = (req.user as any).id;
+        const userId = req.userId!;
 
         logger.info('Confirming ENS transaction', {
             deploymentId: id,
@@ -422,7 +433,7 @@ export class DeploymentsController {
     async markUploadFailed(req: Request, res: Response) {
         const { id } = req.params;
         const { message } = req.body as { message?: string };
-        const userId = (req.user as any).id;
+        const userId = req.userId!;
 
         logger.warn('Marking deployment upload as failed', {
             deploymentId: id,
@@ -487,7 +498,7 @@ export class DeploymentsController {
     // Get deployment status
     async getStatus(req: Request, res: Response) {
         const { id } = req.params;
-        const userId = (req.user as any).id;
+        const userId = req.userId!;
 
         logger.debug('Getting deployment status', { deploymentId: id, userId });
 
@@ -533,7 +544,7 @@ export class DeploymentsController {
 
     // List deployments with optional status filter (used by auto-deploy poller)
     async list(req: Request, res: Response) {
-        const userId = (req.user as any).id;
+        const userId = req.userId!;
         const { status, limit = '20' } = req.query;
 
         logger.debug('Listing deployments', {
@@ -585,7 +596,7 @@ export class DeploymentsController {
     // List project deployments
     async listByProject(req: Request, res: Response) {
         const { id } = req.params; // project ID
-        const userId = (req.user as any).id;
+        const userId = req.userId!;
 
         logger.debug('Listing project deployments', { projectId: id, userId });
 
@@ -627,7 +638,7 @@ export class DeploymentsController {
     // Download build artifacts (zipped output directory)
     async downloadArtifacts(req: Request, res: Response) {
         const { id } = req.params;
-        const userId = (req.user as any).id;
+        const userId = req.userId!;
 
         logger.info('Downloading build artifacts', { deploymentId: id, userId });
 
@@ -727,7 +738,7 @@ export class DeploymentsController {
 
     async downloadCar(req: Request, res: Response) {
         const { id } = req.params;
-        const userId = (req.user as any).id;
+        const userId = req.userId!;
 
         logger.info('Downloading CAR artifact', { deploymentId: id, userId });
 
@@ -846,7 +857,8 @@ export class DeploymentsController {
     // Run the build process for a deployment
     async runBuildPipeline(
         deploymentId: string,
-        project: any
+        project: any,
+        installationId: number
     ) {
 
         try {
@@ -856,6 +868,7 @@ export class DeploymentsController {
                 projectName: project.name,
                 repoUrl: project.repoUrl,
                 repoBranch: project.repoBranch || 'main',
+                installationId,
             });
 
             // Update status to cloning when build actually starts
@@ -867,7 +880,7 @@ export class DeploymentsController {
             logger.info(`Starting build for deployment ${deploymentId}`);
 
             // Clone and build
-            const result = await buildService.cloneAndBuild(project.repoUrl, project.repoBranch || 'main', project.user.githubToken, deploymentId, {
+            const result = await buildService.cloneAndBuild(project.repoUrl, project.repoBranch || 'main', installationId, deploymentId, {
                 buildCommand: project.buildCommand ?? undefined,
                 outputDir: project.outputDir ?? undefined,
                 frontendDir: project.frontendDir ?? undefined,
@@ -997,7 +1010,7 @@ export class DeploymentsController {
      */
     async skipENS(req: Request, res: Response) {
         const { id } = req.params;
-        const userId = (req.user as any).id;
+        const userId = req.userId!;
 
         logger.info('Skipping ENS update for deployment', { deploymentId: id, userId });
 

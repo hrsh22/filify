@@ -141,7 +141,16 @@ class FilecoinUploadService {
             });
 
             if (readinessCheck.status === 'blocked') {
-                const reasons = (readinessCheck as any).reasons?.map((r: any) => r.message).join(', ') || 'Unknown';
+                const serializeWithBigInt = (obj: unknown) => JSON.stringify(obj, (_, v) => typeof v === 'bigint' ? v.toString() : v);
+                logger.error('Upload readiness blocked', { 
+                    deploymentId, 
+                    status: readinessCheck.status,
+                    readinessCheck: serializeWithBigInt(readinessCheck),
+                });
+                const suggestions = (readinessCheck as any).suggestions || [];
+                const capacitySuggestions = (readinessCheck as any).capacity?.suggestions || [];
+                const allSuggestions = [...suggestions, ...capacitySuggestions];
+                const reasons = allSuggestions.length > 0 ? allSuggestions.join(', ') : 'Unknown blocking reason';
                 throw new Error(`Upload blocked: ${reasons}`);
             }
 

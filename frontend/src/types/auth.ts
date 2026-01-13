@@ -1,11 +1,6 @@
 export interface User {
-  id: string
-  githubId: number
-  githubUsername: string
-  githubEmail?: string | null
-  avatarUrl?: string | null
+  walletAddress: string
+  ensName?: string | null
   createdAt: string
   updatedAt: string
 }
-
-

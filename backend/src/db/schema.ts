@@ -2,28 +2,35 @@ import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
 import { relations } from 'drizzle-orm';
 
 export const users = sqliteTable('users', {
-  id: text('id').primaryKey(),
-  githubId: integer('github_id').unique().notNull(),
-  githubUsername: text('github_username').notNull(),
-  githubEmail: text('github_email'),
-  githubToken: text('github_token').notNull(), // encrypted
-  avatarUrl: text('avatar_url'),
+  walletAddress: text('wallet_address').primaryKey(),
+  ensName: text('ens_name'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
 });
 
+export const githubInstallations = sqliteTable('github_installations', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.walletAddress, { onDelete: 'cascade' }),
+  installationId: integer('installation_id').notNull().unique(),
+  accountLogin: text('account_login').notNull(),
+  accountType: text('account_type').notNull(),
+  accountAvatarUrl: text('account_avatar_url'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+});
+
 export const projects = sqliteTable('projects', {
   id: text('id').primaryKey(),
-  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => users.walletAddress, { onDelete: 'cascade' }),
+  installationId: text('installation_id').references(() => githubInstallations.id, { onDelete: 'set null' }),
   name: text('name').notNull(),
-  repoName: text('repo_name').notNull(),
+  repoFullName: text('repo_full_name').notNull(),
   repoUrl: text('repo_url').notNull(),
   repoBranch: text('repo_branch').notNull().default('main'),
   autoDeployBranch: text('auto_deploy_branch').notNull().default('main'),
-  network: text('network').notNull().default('mainnet'), // 'mainnet' | 'sepolia'
-  ensName: text('ens_name'), // Optional - null means IPFS-only deployment
-  ensOwnerAddress: text('ens_owner_address'), // Required if ensName is set
-  ethereumRpcUrl: text('ethereum_rpc_url'), // Required if ensName is set
+  network: text('network').notNull().default('mainnet'),
+  ensName: text('ens_name'),
+  ensOwnerAddress: text('ens_owner_address'),
+  ethereumRpcUrl: text('ethereum_rpc_url'),
   buildCommand: text('build_command'),
   outputDir: text('output_dir'),
   frontendDir: text('frontend_dir'),
@@ -36,7 +43,7 @@ export const projects = sqliteTable('projects', {
 export const deployments = sqliteTable('deployments', {
   id: text('id').primaryKey(),
   projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
-  status: text('status').notNull(), // includes pending_build & pending_upload states
+  status: text('status').notNull(),
   triggeredBy: text('triggered_by'),
   commitSha: text('commit_sha'),
   commitMessage: text('commit_message'),
@@ -53,12 +60,25 @@ export const deployments = sqliteTable('deployments', {
 
 export const usersRelations = relations(users, ({ many }) => ({
   projects: many(projects),
+  githubInstallations: many(githubInstallations),
+}));
+
+export const githubInstallationsRelations = relations(githubInstallations, ({ one, many }) => ({
+  user: one(users, {
+    fields: [githubInstallations.userId],
+    references: [users.walletAddress],
+  }),
+  projects: many(projects),
 }));
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
   user: one(users, {
     fields: [projects.userId],
-    references: [users.id],
+    references: [users.walletAddress],
+  }),
+  installation: one(githubInstallations, {
+    fields: [projects.installationId],
+    references: [githubInstallations.id],
   }),
   deployments: many(deployments),
 }));
@@ -69,7 +89,3 @@ export const deploymentsRelations = relations(deployments, ({ one }) => ({
     references: [projects.id],
   }),
 }));
-
-
-
-

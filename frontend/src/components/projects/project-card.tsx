@@ -110,7 +110,7 @@ export function ProjectCard({ project, onChange }: ProjectCardProps) {
                                     target="_blank"
                                     rel="noreferrer"
                                     className="inline-flex items-center gap-2 text-lg font-semibold text-foreground hover:text-primary transition-smooth group truncate">
-                                    <span className="truncate">{project.repoName}</span>
+                                    <span className="truncate">{project.repoFullName}</span>
                                     <ExternalLink className="h-4 w-4 shrink-0 transition-smooth group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                                 </a>
                             </div>

@@ -1,9 +1,9 @@
 import { Request, Response } from 'express';
 import { db } from '../db';
-import { projects } from '../db/schema';
+import { projects, githubInstallations } from '../db/schema';
 import { eq, and, ne } from 'drizzle-orm';
 import { generateId } from '../utils/generateId';
-import { githubService } from '../services/github.service';
+import { githubAppService } from '../services/github-app.service';
 import { logger } from '../utils/logger';
 import { webhookSecretService } from '../services/webhook-secret.service';
 import { env } from '../config/env';
@@ -17,7 +17,7 @@ function getWebhookUrl() {
 
 export class ProjectsController {
   async list(req: Request, res: Response) {
-    const userId = (req.user as any).id;
+    const userId = req.userId!;
     const networkParam = req.query.network as string | undefined;
     const network: NetworkType = networkParam && isValidNetwork(networkParam) ? networkParam : 'mainnet';
 
@@ -56,7 +56,7 @@ export class ProjectsController {
 
   async getById(req: Request, res: Response) {
     const { id } = req.params;
-    const userId = (req.user as any).id;
+    const userId = req.userId!;
 
     logger.debug('Getting project by ID', { projectId: id, userId });
 
@@ -101,13 +101,13 @@ export class ProjectsController {
   }
 
   async create(req: Request, res: Response) {
-    const userId = (req.user as any).id;
-    const user = req.user as any;
+    const userId = req.userId!;
     const {
       name,
-      repoName,
+      repoFullName,
       repoUrl,
       repoBranch,
+      installationId,
       network = 'mainnet',
       ensName,
       ensOwnerAddress,
@@ -126,8 +126,9 @@ export class ProjectsController {
     logger.info('Creating new project', {
       userId,
       projectName: name,
-      repoName,
+      repoFullName,
       repoBranch: repoBranch || 'main',
+      installationId,
       network,
       ensName: ensName || '(none)',
       ensOwnerAddress: normalizedOwnerAddress || '(none)',
@@ -136,6 +137,22 @@ export class ProjectsController {
     });
 
     try {
+      // Verify installation belongs to user
+      const installation = await db.query.githubInstallations.findFirst({
+        where: and(
+          eq(githubInstallations.id, installationId),
+          eq(githubInstallations.userId, userId)
+        ),
+      });
+
+      if (!installation) {
+        logger.warn('Project creation denied: invalid installation', { userId, installationId });
+        return res.status(400).json({
+          error: 'InvalidInstallation',
+          message: 'Invalid GitHub installation selected',
+        });
+      }
+
       // Check for ENS conflict if ENS is provided
       if (hasEns) {
         const existingProject = await db.query.projects.findFirst({
@@ -170,9 +187,9 @@ export class ProjectsController {
       }
 
       // Validate repository access
-      const [owner, repo] = repoName.split('/');
-      logger.debug('Validating repository access', { owner, repo, userId });
-      await githubService.getRepository(user.githubToken, owner, repo);
+      const [owner, repo] = repoFullName.split('/');
+      logger.debug('Validating repository access', { owner, repo, userId, installationId: installation.installationId });
+      await githubAppService.getRepository(installation.installationId, owner, repo);
       logger.debug('Repository access validated', { owner, repo });
 
       const secretPlain = webhookSecretService.generate();
@@ -181,13 +198,13 @@ export class ProjectsController {
       const selectedBranch = repoBranch || 'main';
 
       logger.debug('Registering GitHub webhook during project creation', {
-        repoName,
+        repoFullName,
         webhookUrl,
         selectedBranch,
       });
-      await githubService.registerWebhook(user.githubToken, repoName, webhookUrl, secretPlain);
+      await githubAppService.registerWebhook(installation.installationId, repoFullName, webhookUrl, secretPlain);
       logger.info('Webhook registered automatically for project', {
-        repoName,
+        repoFullName,
         webhookUrl,
         selectedBranch,
       });
@@ -198,8 +215,9 @@ export class ProjectsController {
         .values({
           id: projectId,
           userId,
+          installationId: installation.id,
           name,
-          repoName,
+          repoFullName,
           repoUrl,
           repoBranch: selectedBranch,
           autoDeployBranch: selectedBranch,
@@ -220,7 +238,7 @@ export class ProjectsController {
       logger.info('Project created successfully', {
         projectId,
         projectName: name,
-        repoName,
+        repoFullName,
         userId,
       });
 
@@ -230,7 +248,7 @@ export class ProjectsController {
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
         projectName: name,
-        repoName,
+        repoFullName,
         userId,
       });
       res.status(500).json({
@@ -242,7 +260,7 @@ export class ProjectsController {
 
   async update(req: Request, res: Response) {
     const { id } = req.params;
-    const userId = (req.user as any).id;
+    const userId = req.userId!;
     const updates = req.body;
 
     logger.info('Updating project', {
@@ -301,13 +319,16 @@ export class ProjectsController {
 
   async delete(req: Request, res: Response) {
     const { id } = req.params;
-    const userId = (req.user as any).id;
+    const userId = req.userId!;
 
     logger.info('Deleting project', { projectId: id, userId });
 
     try {
       const project = await db.query.projects.findFirst({
         where: and(eq(projects.id, id), eq(projects.userId, userId)),
+        with: {
+          installation: true,
+        },
       });
 
       if (!project) {
@@ -316,6 +337,20 @@ export class ProjectsController {
           error: 'Not Found',
           message: 'Project not found',
         });
+      }
+
+      // Try to unregister webhook if enabled
+      if (project.webhookEnabled && project.installation) {
+        try {
+          const webhookUrl = getWebhookUrl();
+          await githubAppService.unregisterWebhook(project.installation.installationId, project.repoFullName, webhookUrl);
+          logger.debug('Webhook unregistered during project deletion', { projectId: id });
+        } catch (error) {
+          logger.warn('Failed to unregister webhook during deletion', {
+            projectId: id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
 
       await db.delete(projects).where(eq(projects.id, id));
@@ -343,7 +378,7 @@ export class ProjectsController {
 
   async enableWebhook(req: Request, res: Response) {
     const { id } = req.params;
-    const userId = (req.user as any).id;
+    const userId = req.userId!;
     const { branch } = req.body as { branch?: string };
 
     logger.info('Enabling webhook for project', { projectId: id, userId, branch });
@@ -352,7 +387,7 @@ export class ProjectsController {
       const project = await db.query.projects.findFirst({
         where: and(eq(projects.id, id), eq(projects.userId, userId)),
         with: {
-          user: true,
+          installation: true,
         },
       });
 
@@ -364,17 +399,24 @@ export class ProjectsController {
         });
       }
 
+      if (!project.installation) {
+        return res.status(400).json({
+          error: 'NoGitHubInstallation',
+          message: 'This project is not linked to a GitHub App installation',
+        });
+      }
+
       const secretPlain = webhookSecretService.generate();
       const encryptedSecret = webhookSecretService.encrypt(secretPlain);
       const webhookUrl = getWebhookUrl();
 
       logger.debug('Registering webhook with GitHub', {
         projectId: id,
-        repoName: project.repoName,
+        repoFullName: project.repoFullName,
         webhookUrl,
       });
 
-      await githubService.registerWebhook(project.user.githubToken, project.repoName, webhookUrl, secretPlain);
+      await githubAppService.registerWebhook(project.installation.installationId, project.repoFullName, webhookUrl, secretPlain);
 
       const selectedBranch = branch || project.autoDeployBranch || project.repoBranch || 'main';
 
@@ -391,7 +433,7 @@ export class ProjectsController {
 
       logger.info('Webhook enabled successfully', {
         projectId: id,
-        repoName: project.repoName,
+        repoFullName: project.repoFullName,
         autoDeployBranch: selectedBranch,
         userId,
       });
@@ -416,7 +458,7 @@ export class ProjectsController {
 
   async disableWebhook(req: Request, res: Response) {
     const { id } = req.params;
-    const userId = (req.user as any).id;
+    const userId = req.userId!;
 
     logger.info('Disabling webhook for project', { projectId: id, userId });
 
@@ -424,7 +466,7 @@ export class ProjectsController {
       const project = await db.query.projects.findFirst({
         where: and(eq(projects.id, id), eq(projects.userId, userId)),
         with: {
-          user: true,
+          installation: true,
         },
       });
 
@@ -436,22 +478,27 @@ export class ProjectsController {
         });
       }
 
-      const webhookUrl = getWebhookUrl();
+      if (!project.installation) {
+        // Just disable in DB if no installation found (might have been removed)
+        logger.warn('No installation found for webhook disable, skipping GitHub unregister', { projectId: id });
+      } else {
+        const webhookUrl = getWebhookUrl();
 
-      logger.debug('Unregistering webhook from GitHub', {
-        projectId: id,
-        repoName: project.repoName,
-        webhookUrl,
-      });
-
-      try {
-        await githubService.unregisterWebhook(project.user.githubToken, project.repoName, webhookUrl);
-        logger.debug('Webhook unregistered from GitHub', { projectId: id });
-      } catch (unregisterError) {
-        logger.warn('Failed to unregister webhook from GitHub:', {
-          error: unregisterError instanceof Error ? unregisterError.message : String(unregisterError),
+        logger.debug('Unregistering webhook from GitHub', {
           projectId: id,
+          repoFullName: project.repoFullName,
+          webhookUrl,
         });
+
+        try {
+          await githubAppService.unregisterWebhook(project.installation.installationId, project.repoFullName, webhookUrl);
+          logger.debug('Webhook unregistered from GitHub', { projectId: id });
+        } catch (unregisterError) {
+          logger.warn('Failed to unregister webhook from GitHub:', {
+            error: unregisterError instanceof Error ? unregisterError.message : String(unregisterError),
+            projectId: id,
+          });
+        }
       }
 
       const [updated] = await db
@@ -466,7 +513,7 @@ export class ProjectsController {
 
       logger.info('Webhook disabled successfully', {
         projectId: id,
-        repoName: project.repoName,
+        repoFullName: project.repoFullName,
         userId,
       });
 
@@ -491,7 +538,7 @@ export class ProjectsController {
   async attachEns(req: Request, res: Response) {
     const { id } = req.params;
     const { ensName, ensOwnerAddress, force } = req.body;
-    const userId = (req.user as any).id;
+    const userId = req.userId!;
 
     logger.info('Attaching ENS to project', { projectId: id, ensName, userId, force });
 
@@ -612,7 +659,7 @@ export class ProjectsController {
   async confirmEnsAttach(req: Request, res: Response) {
     const { id } = req.params;
     const { txHash, ipfsCid } = req.body;
-    const userId = (req.user as any).id;
+    const userId = req.userId!;
 
     logger.info('Confirming ENS attachment', { projectId: id, txHash, userId });
 
@@ -680,7 +727,7 @@ export class ProjectsController {
   // Remove ENS from project
   async removeEns(req: Request, res: Response) {
     const { id } = req.params;
-    const userId = (req.user as any).id;
+    const userId = req.userId!;
 
     logger.info('Removing ENS from project', { projectId: id, userId });
 

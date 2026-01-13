@@ -10,7 +10,7 @@ export function requestLogger(req: Request, res: Response, next: NextFunction) {
   logger.info(`${method} ${originalUrl}`, {
     ip,
     userAgent,
-    userId: (req.user as any)?.id || 'anonymous',
+    userId: req.userId || 'anonymous',
   });
 
   // Capture response finish
@@ -23,7 +23,7 @@ export function requestLogger(req: Request, res: Response, next: NextFunction) {
       duration: `${duration}ms`,
       statusCode,
       ip,
-      userId: (req.user as any)?.id || 'anonymous',
+      userId: req.userId || 'anonymous',
     });
   });
 

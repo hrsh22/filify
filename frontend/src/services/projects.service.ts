@@ -4,9 +4,10 @@ import type { Network } from '@/context/network-context'
 
 type CreateProjectPayload = {
   name: string
-  repoName: string
+  repoFullName: string
   repoUrl: string
   repoBranch: string
+  installationId: string
   network: Network
   ensName?: string
   ensOwnerAddress?: string

@@ -121,18 +121,23 @@ export function AppHeader() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative h-10 w-10 rounded-full p-0">
                     <Avatar className="h-10 w-10">
-                      <AvatarImage src={user.avatarUrl ?? undefined} alt={user.githubUsername} />
-                      <AvatarFallback className="bg-primary text-primary-foreground text-sm font-semibold">
-                        {user.githubUsername.charAt(0).toUpperCase()}
-                      </AvatarFallback>
+                      {user.ensName ? (
+                        <AvatarFallback className="bg-primary text-primary-foreground text-sm font-semibold">
+                          {user.ensName.slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      ) : (
+                        <AvatarFallback className="bg-primary text-primary-foreground text-sm font-semibold">
+                          {user.walletAddress.slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      )}
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56" align="end" forceMount>
                   <DropdownMenuLabel className="font-normal">
                     <div className="flex flex-col space-y-1">
-                      <p className="text-sm font-medium leading-none">{user.githubUsername}</p>
-                      <p className="text-xs leading-none text-muted-foreground">GitHub User</p>
+                      <p className="text-sm font-medium leading-none">{user.ensName || user.walletAddress.slice(0, 6)}</p>
+                      <p className="text-xs leading-none text-muted-foreground">Connected Wallet</p>
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />

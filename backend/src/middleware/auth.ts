@@ -1,7 +1,18 @@
 import { Request, Response, NextFunction } from 'express';
 
+declare module 'express-session' {
+  interface SessionData {
+    nonce?: string;
+    siwe?: {
+      address: string;
+      chainId: number;
+    };
+  }
+}
+
 export function isAuthenticated(req: Request, res: Response, next: NextFunction) {
-  if (req.isAuthenticated()) {
+  if (req.session.siwe?.address) {
+    req.userId = req.session.siwe.address;
     return next();
   }
 
@@ -12,13 +23,8 @@ export function isAuthenticated(req: Request, res: Response, next: NextFunction)
 }
 
 export function attachUser(req: Request, res: Response, next: NextFunction) {
-  // Make user available in req for authenticated routes
-  if (req.user) {
-    req.userId = req.user.id;
+  if (req.session.siwe?.address) {
+    req.userId = req.session.siwe.address;
   }
   next();
 }
-
-
-
-

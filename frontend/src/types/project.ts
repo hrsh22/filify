@@ -6,7 +6,8 @@ export interface Project {
   id: string
   userId: string
   name: string
-  repoName: string
+  installationId?: string | null
+  repoFullName: string
   repoUrl: string
   repoBranch: string
   autoDeployBranch: string

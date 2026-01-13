@@ -8,6 +8,8 @@ export interface RepositorySummary {
   private: boolean
   description?: string | null
   updatedAt?: string
+  installationId: string
+  accountLogin: string
 }
 
 export interface BranchSummary {
@@ -15,4 +17,11 @@ export interface BranchSummary {
   protected: boolean
 }
 
-
+export interface GitHubInstallation {
+  id: string
+  installationId: number
+  accountLogin: string
+  accountType: 'User' | 'Organization'
+  accountAvatarUrl?: string | null
+  createdAt: string
+}

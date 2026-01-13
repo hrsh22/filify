@@ -342,7 +342,7 @@ export function DeploymentDetailPage() {
                     <CardContent className="space-y-4 text-sm">
                         <div>
                             <p className="text-muted-foreground mb-1">Project</p>
-                            <p className="font-semibold">{project?.name ?? project?.repoName ?? deployment.projectId}</p>
+                            <p className="font-semibold">{project?.name ?? project?.repoFullName ?? deployment.projectId}</p>
                         </div>
                         <Separator />
                         <div>

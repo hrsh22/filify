@@ -3,9 +3,10 @@ import { z } from 'zod';
 export const createProjectSchema = z.object({
     body: z.object({
         name: z.string().min(1).max(100),
-        repoName: z.string().min(1),
+        repoFullName: z.string().min(1),
         repoUrl: z.string().url(),
         repoBranch: z.string().optional().default('main'),
+        installationId: z.string().min(1),
         network: z.enum(['mainnet', 'sepolia']).default('mainnet'),
         ensName: z.string().regex(/^[a-z0-9-]+(\.[a-z0-9-]+)*\.eth$/, 'Invalid ENS name format').optional().nullable(),
         ensOwnerAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/, 'Invalid Ethereum address').optional().nullable(),
@@ -13,9 +14,9 @@ export const createProjectSchema = z.object({
         buildCommand: z.string().optional(),
         outputDir: z.string().optional(),
         frontendDir: z.string().min(1).optional(),
+        force: z.boolean().optional(),
     }).refine(
         (data) => {
-            // If ensName is provided, ensOwnerAddress must also be provided
             if (data.ensName && !data.ensOwnerAddress) return false;
             return true;
         },

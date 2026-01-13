@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom'
 import { LandingPage } from '@/pages/landing'
 import { AuthCallbackPage } from '@/pages/auth-callback'
 import { AuthErrorPage } from '@/pages/auth-error'
+import { GitHubCallbackPage } from '@/pages/github-callback'
 import { DashboardPage } from '@/pages/dashboard'
 import { NewProjectPage } from '@/pages/new-project'
 import { ProjectDetailPage } from '@/pages/project-detail'
@@ -17,6 +18,9 @@ function App() {
       <Route path="/callback" element={<AuthCallbackPage />} />
       <Route path="/auth/success" element={<AuthCallbackPage />} />
       <Route path="/auth/error" element={<AuthErrorPage />} />
+      <Route path="/github/callback" element={<GitHubCallbackPage />} />
+      <Route path="/github/success" element={<GitHubCallbackPage />} />
+      <Route path="/github/error" element={<GitHubCallbackPage />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<DashboardLayout />}>

@@ -3,8 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAppKitAccount } from "@reown/appkit/react";
 import { usePublicClient } from "wagmi";
 import { useQuery } from "@tanstack/react-query";
-import { Github, Globe, Rocket, ShieldCheck, Workflow, Zap, CheckCircle2, ArrowRight } from "lucide-react";
-import { SignInButton } from "@/components/auth/sign-in-button";
+import { Globe, Rocket, ShieldCheck, Workflow, Zap, CheckCircle2, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/auth-context";
 import { WalletConnectButton } from "@/components/auth/wallet-connect-button";
@@ -14,14 +13,14 @@ import { Badge } from "@/components/ui/badge";
 
 const steps = [
     {
-        icon: Github,
-        title: "Connect GitHub",
-        description: "Authorize Filify to access your repositories securely."
+        icon: Zap,
+        title: "Connect Wallet",
+        description: "Sign in with your Ethereum wallet. One click, no passwords."
     },
     {
-        icon: Zap,
-        title: "Create a project",
-        description: "Pick a repo, choose a branch, and configure ENS + build settings."
+        icon: Lock,
+        title: "Connect GitHub",
+        description: "Select only the repositories you want to share. You control access."
     },
     {
         icon: Rocket,
@@ -37,9 +36,9 @@ const steps = [
 
 const features = [
     {
-        icon: Github,
-        title: "GitHub OAuth",
-        description: "Use your existing GitHub identity to sign in and link repositories."
+        icon: ShieldCheck,
+        title: "Wallet-First Auth",
+        description: "Your wallet is your identity. No email, no password, no GitHub required to log in."
     },
     {
         icon: Workflow,
@@ -52,9 +51,9 @@ const features = [
         description: "Upload to Filecoin and publish via ENS contenthash updates."
     },
     {
-        icon: ShieldCheck,
-        title: "Secure storage",
-        description: "Secrets stay on the backend. Frontend never stores private keys."
+        icon: Lock,
+        title: "Selective GitHub Access",
+        description: "Connect GitHub after login. Choose exactly which repos to share."
     }
 ];
 
@@ -68,7 +67,6 @@ export function LandingPage() {
     const { isConnected, address } = useAppKitAccount();
     const publicClient = usePublicClient();
 
-    // Fetch ENS name for the connected wallet address
     const { data: ensName } = useQuery({
         queryKey: ["walletEnsName", address],
         queryFn: async () => {
@@ -80,7 +78,7 @@ export function LandingPage() {
             }
         },
         enabled: isConnected && !!address && !!publicClient,
-        staleTime: 5 * 60 * 1000 // Cache for 5 minutes
+        staleTime: 5 * 60 * 1000
     });
 
     const walletDisplayName = ensName || (address ? formatAddress(address) : null);
@@ -94,7 +92,6 @@ export function LandingPage() {
     return (
         <div className="min-h-screen bg-background">
             <div className="mx-auto flex w-full max-w-7xl flex-col gap-24 px-4 py-16 md:px-8 md:py-24">
-                {/* Hero Section */}
                 <section className="grid gap-12 md:grid-cols-2 md:items-center animate-fade-in">
                     <div className="space-y-8">
                         <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 border border-primary/20 px-4 py-1.5 text-sm font-medium text-primary">
@@ -109,12 +106,11 @@ export function LandingPage() {
                             with one click
                         </h1>
                         <p className="text-xl text-muted-foreground leading-relaxed">
-                            Filify gives you a Vercel-like dashboard powered by Filecoin storage and ENS domains. Connect GitHub, pick a repo, and
+                            Filify gives you a Vercel-like dashboard powered by Filecoin storage and ENS domains. Connect your wallet, pick a repo, and
                             launch in minutes.
                         </p>
                         <div className="flex flex-col gap-4 sm:flex-row">
-                            <WalletConnectButton size="lg" className="sm:min-w-[200px]" />
-                            <SignInButton size="lg" className="sm:min-w-[200px]" />
+                            <WalletConnectButton size="lg" className="sm:min-w-[220px]" />
                         </div>
                         <div className="flex flex-col gap-3 text-sm">
                             {isConnected && walletDisplayName ? (
@@ -126,21 +122,6 @@ export function LandingPage() {
                                     </Badge>
                                 </div>
                             ) : null}
-                            <p className="flex items-center gap-2 text-muted-foreground">
-                                {isConnected ? (
-                                    <>
-                                        <CheckCircle2 className="h-4 w-4 text-primary" />
-                                        <span>Wallet connected — continue with GitHub to unlock the dashboard.</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30 flex items-center justify-center text-xs">
-                                            1
-                                        </div>
-                                        <span>Connect your wallet to enable GitHub sign-in.</span>
-                                    </>
-                                )}
-                            </p>
                             <Separator className="my-2" />
                             <p className="flex items-center gap-2 text-muted-foreground">
                                 <CheckCircle2 className="h-4 w-4 text-primary" />
@@ -149,7 +130,6 @@ export function LandingPage() {
                         </div>
                     </div>
 
-                    {/* Steps Card */}
                     <Card className="hover-lift">
                         <CardContent className="p-6 space-y-6">
                             <div className="flex items-center gap-3">
@@ -180,7 +160,6 @@ export function LandingPage() {
                     </Card>
                 </section>
 
-                {/* Features Section */}
                 <section className="space-y-12 animate-fade-in">
                     <div className="text-center space-y-4">
                         <h2 className="text-4xl font-bold">Powerful features for modern deployment</h2>
@@ -201,18 +180,12 @@ export function LandingPage() {
                     </div>
                 </section>
 
-                {/* CTA Section */}
                 <section className="rounded-2xl bg-gradient-to-br from-primary via-orange-600 to-amber-600 p-12 text-center shadow-elevated animate-fade-in glow-primary">
                     <div className="mx-auto max-w-2xl space-y-6">
                         <h2 className="text-4xl font-bold text-black">Ready to get started?</h2>
                         <p className="text-lg text-black/80">Join developers building on the decentralized web with Filecoin and ENS.</p>
                         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                             <WalletConnectButton size="lg" className="sm:min-w-[220px] bg-black text-white hover:bg-black/90 border-black" />
-                            <SignInButton
-                                size="lg"
-                                variant="secondary"
-                                className="sm:min-w-[240px] bg-black text-white hover:bg-black/90 border-black"
-                            />
                         </div>
                     </div>
                 </section>

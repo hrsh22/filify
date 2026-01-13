@@ -2,11 +2,12 @@ import winston from 'winston';
 
 const { combine, timestamp, printf, colorize, errors } = winston.format;
 
-const logFormat = printf(({ level, message, timestamp, stack }) => {
+const logFormat = printf(({ level, message, timestamp, stack, ...meta }) => {
+  const metaStr = Object.keys(meta).length ? ' ' + JSON.stringify(meta) : '';
   if (stack) {
-    return `${timestamp} [${level}]: ${message}\n${stack}`;
+    return `${timestamp} [${level}]: ${message}${metaStr}\n${stack}`;
   }
-  return `${timestamp} [${level}]: ${message}`;
+  return `${timestamp} [${level}]: ${message}${metaStr}`;
 });
 
 export const logger = winston.createLogger({

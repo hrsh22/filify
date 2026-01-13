@@ -1,14 +1,14 @@
 import { Request, Response } from 'express';
 import crypto from 'crypto';
 import { db } from '../db';
-import { projects, deployments, users } from '../db/schema';
+import { projects, deployments, users, githubInstallations } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { webhookSecretService } from '../services/webhook-secret.service';
 import { logger } from '../utils/logger';
 import { generateId } from '../utils/generateId';
 import { deploymentQueue } from '../services/deployment-queue.service';
 import { deploymentsController } from './deployments.controller';
-import { githubService } from '../services/github.service';
+import { githubAppService } from '../services/github-app.service';
 import { env } from '../config/env';
 
 type GithubPushPayload = {
@@ -24,6 +24,7 @@ type GithubPushPayload = {
 
 type ProjectWithUser = typeof projects.$inferSelect & {
     user: typeof users.$inferSelect;
+    installation: typeof githubInstallations.$inferSelect | null;
 };
 
 const WEBHOOK_ENDPOINT = '/api/webhooks/github';
@@ -50,8 +51,8 @@ class WebhooksController {
     }
 
     private async rotateWebhookSecret(project: ProjectWithUser) {
-        if (!project.user) {
-            logger.warn('Cannot rotate webhook secret: project user missing', { projectId: project.id });
+        if (!project.installation) {
+            logger.warn('Cannot rotate webhook secret: project installation missing', { projectId: project.id });
             return;
     }
 
@@ -60,7 +61,7 @@ class WebhooksController {
             const encryptedSecret = webhookSecretService.encrypt(secretPlain);
             const webhookUrl = this.getWebhookUrl();
 
-            await githubService.registerWebhook(project.user.githubToken, project.repoName, webhookUrl, secretPlain);
+            await githubAppService.registerWebhook(project.installation.installationId, project.repoFullName, webhookUrl, secretPlain);
 
             await db
                 .update(projects)
@@ -72,7 +73,7 @@ class WebhooksController {
 
             logger.info('Webhook secret rotated after invalid signature', {
                 projectId: project.id,
-                repoName: project.repoName,
+                repoFullName: project.repoFullName,
             });
         } catch (error) {
             logger.error('Failed to rotate webhook secret after invalid signature', {
@@ -131,8 +132,8 @@ class WebhooksController {
 
         try {
             const project = await db.query.projects.findFirst({
-                where: eq(projects.repoName, repoFullName),
-                with: { user: true },
+                where: eq(projects.repoFullName, repoFullName),
+                with: { user: true, installation: true },
             });
 
         if (!project || !project.webhookEnabled || !project.webhookSecret) {
@@ -208,7 +209,16 @@ class WebhooksController {
                 projectId: project.id,
             });
 
-            deploymentQueue.enqueue(project.id, () => deploymentsController.runBuildPipeline(deploymentId, project));
+            if (!project.installation) {
+                logger.warn('Webhook ignored: no GitHub installation linked', {
+                    deliveryId,
+                    projectId: project.id,
+                    repoFullName,
+                });
+                return res.status(200).json({ ignored: true });
+            }
+
+            deploymentQueue.enqueue(project.id, () => deploymentsController.runBuildPipeline(deploymentId, project, project.installation!.installationId));
 
             logger.info('Webhook deployment queued successfully', {
                 deploymentId,

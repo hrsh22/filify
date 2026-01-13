@@ -1,7 +1,7 @@
 import { exec, type ChildProcess, type ExecOptions } from 'child_process';
 import path from 'path';
 import fs from 'fs/promises';
-import { encryptionService } from './encryption.service';
+import { githubAppService } from './github-app.service';
 import { logger } from '../utils/logger';
 import { getBuildsRoot, getDeploymentBuildDir } from '../utils/paths';
 import { buildCarFromDirectory } from '../utils/car-builder';
@@ -36,7 +36,7 @@ class BuildService {
     async cloneAndBuild(
         repoUrl: string,
         branch: string,
-        encryptedToken: string,
+        installationId: number,
         deploymentId: string,
         options: BuildOptions = {}
     ): Promise<BuildResult> {
@@ -52,6 +52,7 @@ class BuildService {
             repoUrl,
             branch,
             buildDir,
+            installationId,
             frontendDir: frontendDir || 'root',
             frontendWorkingDir,
             buildCommand: buildCommand || 'default',
@@ -63,16 +64,16 @@ class BuildService {
             await fs.mkdir(this.BUILD_ROOT, { recursive: true });
             logger.debug('Build root directory ensured', { buildRoot: this.BUILD_ROOT });
 
-            // Decrypt GitHub token
-            logger.debug('Decrypting GitHub token for clone', { deploymentId });
-            const token = encryptionService.decrypt(encryptedToken);
+            // Get installation token for cloning
+            logger.debug('Fetching installation token for clone', { deploymentId, installationId });
+            const token = await githubAppService.getInstallationToken(installationId);
 
             // Clone repository with authentication
             logs += `Cloning repository: ${repoUrl} (branch: ${branch})\n`;
             if (frontendDir) {
                 logs += `Frontend directory: ${frontendDir}\n`;
             }
-            const authUrl = repoUrl.replace('https://', `https://${token}@`);
+            const authUrl = repoUrl.replace('https://', `https://x-access-token:${token}@`);
 
             logger.info('Cloning repository', {
                 deploymentId,

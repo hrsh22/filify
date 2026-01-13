@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Combobox } from "@/components/ui/combobox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Info, ExternalLink, Code } from "lucide-react";
+import { Info, ExternalLink, Github, Settings } from "lucide-react";
 import { useToast } from "@/context/toast-context";
 import { useNetwork } from "@/context/network-context";
 import { useNavigate } from "react-router-dom";
@@ -22,6 +22,7 @@ import { projectsService } from "@/services/projects.service";
 import { deploymentsService } from "@/services/deployments.service";
 import { useRepositories, useBranches } from "@/hooks/use-repositories";
 import { useEnsDomains } from "@/hooks/use-ens-domains";
+import { api } from "@/services/api";
 
 const schema = z
     .object({
@@ -97,9 +98,9 @@ export function NewProjectForm() {
     const { network } = useNetwork();
     const { address, isConnected } = useAppKitAccount();
     const publicClient = usePublicClient();
-    const { repositories, loading: reposLoading, error: reposError, refresh } = useRepositories();
+    const { repositories, installations, loading: reposLoading, error: reposError, refresh } = useRepositories();
     const [selectedRepo, setSelectedRepo] = useState<RepositorySummary | null>(null);
-    const { branches, loading: branchesLoading } = useBranches(selectedRepo?.fullName ?? null);
+    const { branches, loading: branchesLoading } = useBranches(selectedRepo?.installationId ?? null, selectedRepo?.fullName ?? null);
     const walletAddress = isConnected && address ? address : null;
     const { domains: ensDomains, loading: ensLoading, error: ensError, refresh: refreshEns } = useEnsDomains(walletAddress);
 
@@ -257,12 +258,18 @@ export function NewProjectForm() {
     const [pendingFormValues, setPendingFormValues] = useState<FormValues | null>(null);
 
     const onSubmit = async (values: FormValues, force = false) => {
+        if (!selectedRepo) {
+            showToast("Please select a repository", "error")
+            return
+        }
+        
         try {
             const project = await projectsService.create({
                 name: values.name,
-                repoName: values.repoName,
+                repoFullName: values.repoName,
                 repoUrl: values.repoUrl,
                 repoBranch: values.repoBranch,
+                installationId: selectedRepo.installationId,
                 network,
                 ensName: values.enableEns ? values.ensName : undefined,
                 ensOwnerAddress: values.enableEns ? values.ensOwnerAddress : undefined,
@@ -369,10 +376,19 @@ export function NewProjectForm() {
 }`}
                                         </pre>
                                     </div>
-                                    <p className="text-xs text-muted-foreground">
-                                        <strong>Note:</strong> We'll automatically create this config if missing, but we recommend adding it to your
-                                        repository for consistency.
-                                    </p>
+                                    <div className="space-y-2 text-xs text-muted-foreground">
+                                        <p>
+                                            <strong>Important:</strong> Static export does not support dynamic routes. Avoid using:
+                                        </p>
+                                        <ul className="list-disc list-inside space-y-1 ml-2">
+                                            <li>
+                                                <code className="px-1 py-0.5 rounded bg-muted font-mono">pages/[id].tsx</code> or{" "}
+                                                <code className="px-1 py-0.5 rounded bg-muted font-mono">app/[slug]/page.tsx</code>
+                                            </li>
+                                            <li>Server-side features like <code className="px-1 py-0.5 rounded bg-muted font-mono">getServerSideProps</code></li>
+                                            <li>API routes in <code className="px-1 py-0.5 rounded bg-muted font-mono">pages/api/</code></li>
+                                        </ul>
+                                    </div>
                                     <a
                                         href="https://nextjs.org/docs/app/api-reference/next-config-js/output"
                                         target="_blank"
@@ -572,65 +588,134 @@ export function NewProjectForm() {
                     <p className="text-sm text-muted-foreground">Connect your repository and configure the project</p>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                        <Label>Repository</Label>
-                        <Combobox
-                            options={repoOptions}
-                            value={selectedRepo?.id.toString()}
-                            onValueChange={handleRepoSelect}
-                            placeholder="Search and select a repository..."
-                            disabled={reposLoading}
-                            loading={reposLoading}
-                            emptyMessage={reposError ? "Failed to load repositories" : "No repositories found"}
-                        />
-                        {reposError && (
-                            <p className="text-sm text-destructive">
-                                {reposError}{" "}
-                                <button type="button" className="underline font-semibold hover:text-destructive/80" onClick={() => refresh()}>
-                                    Retry
-                                </button>
-                            </p>
-                        )}
-                    </div>
+                    {installations.length === 0 && !reposLoading ? (
+                        <div className="flex flex-col items-center justify-center gap-4 py-8 border rounded-lg bg-muted/20">
+                            <Github className="h-12 w-12 text-muted-foreground" />
+                            <div className="text-center space-y-2">
+                                <p className="font-medium">No GitHub repositories connected</p>
+                                <p className="text-sm text-muted-foreground">
+                                    Connect your GitHub account to select which repositories Filify can access
+                                </p>
+                            </div>
+                            <Button
+                                type="button"
+                                onClick={async () => {
+                                    const { data } = await api.get<{ url: string }>('/github/install?returnPath=/projects/new');
+                                    window.location.href = data.url;
+                                }}
+                            >
+                                <Github className="h-5 w-5" />
+                                Connect GitHub
+                            </Button>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="space-y-2">
+                                <Label>Repository</Label>
+                                <Combobox
+                                    options={repoOptions}
+                                    value={selectedRepo?.id.toString()}
+                                    onValueChange={handleRepoSelect}
+                                    placeholder="Search and select a repository..."
+                                    disabled={reposLoading}
+                                    loading={reposLoading}
+                                    emptyMessage={reposError ? "Failed to load repositories" : "No repositories found"}
+                                />
+                                {reposError && (
+                                    <p className="text-sm text-destructive">
+                                        {reposError}{" "}
+                                        <button type="button" className="underline font-semibold hover:text-destructive/80" onClick={() => refresh()}>
+                                            Retry
+                                        </button>
+                                    </p>
+                                )}
+                            </div>
 
-                    <div className="grid gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
-                            <Label htmlFor="name">Project name</Label>
-                            <Input id="name" placeholder="My cool dapp" {...form.register("name")} />
-                            {form.formState.errors.name && (
-                                <p className="text-sm text-destructive font-medium">{form.formState.errors.name.message}</p>
-                            )}
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="branch">Branch</Label>
-                            <select
-                                id="branch"
-                                className="flex h-10 w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                disabled={!selectedRepo || branchesLoading}
-                                {...form.register("repoBranch")}>
-                                <option value="">{branchesLoading ? "Loading..." : "Select a branch"}</option>
-                                {branches.map((branch) => (
-                                    <option key={branch.name} value={branch.name}>
-                                        {branch.name}
-                                    </option>
-                                ))}
-                            </select>
-                            {form.formState.errors.repoBranch && (
-                                <p className="text-sm text-destructive font-medium">{form.formState.errors.repoBranch.message}</p>
-                            )}
-                        </div>
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="frontendDir">Frontend directory (optional)</Label>
-                        <Input id="frontendDir" placeholder="e.g., frontend, web, app" {...form.register("frontendDir")} />
-                        <p className="text-xs text-muted-foreground">
-                            If your frontend code is in a subdirectory, specify the path relative to the repository root. Leave empty if the frontend
-                            is at the root.
-                        </p>
-                        {form.formState.errors.frontendDir && (
-                            <p className="text-sm text-destructive font-medium">{form.formState.errors.frontendDir.message}</p>
-                        )}
-                    </div>
+                            <div className="rounded-lg border bg-muted/30 p-3">
+                                <div className="flex items-center justify-between mb-2">
+                                    <p className="text-sm font-medium text-muted-foreground">Connected accounts</p>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 text-xs"
+                                        onClick={() => refresh()}
+                                        disabled={reposLoading}
+                                    >
+                                        {reposLoading ? "Refreshing…" : "Refresh"}
+                                    </Button>
+                                </div>
+                                <div className="space-y-2">
+                                    {installations.map((installation) => (
+                                        <div key={installation.id} className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                {installation.accountAvatarUrl ? (
+                                                    <img src={installation.accountAvatarUrl} alt="" className="h-5 w-5 rounded-full" />
+                                                ) : (
+                                                    <Github className="h-5 w-5 text-muted-foreground" />
+                                                )}
+                                                <span className="text-sm">{installation.accountLogin}</span>
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-7 gap-1 text-xs text-muted-foreground hover:text-foreground"
+                                                onClick={() => {
+                                                    window.open(
+                                                        `https://github.com/settings/installations/${installation.installationId}`,
+                                                        '_blank'
+                                                    );
+                                                }}
+                                            >
+                                                <Settings className="h-3 w-3" />
+                                                Configure
+                                            </Button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <div className="space-y-2">
+                                    <Label htmlFor="name">Project name</Label>
+                                    <Input id="name" placeholder="My cool dapp" {...form.register("name")} />
+                                    {form.formState.errors.name && (
+                                        <p className="text-sm text-destructive font-medium">{form.formState.errors.name.message}</p>
+                                    )}
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="branch">Branch</Label>
+                                    <select
+                                        id="branch"
+                                        className="flex h-10 w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                        disabled={!selectedRepo || branchesLoading}
+                                        {...form.register("repoBranch")}>
+                                        <option value="">{branchesLoading ? "Loading..." : "Select a branch"}</option>
+                                        {branches.map((branch) => (
+                                            <option key={branch.name} value={branch.name}>
+                                                {branch.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {form.formState.errors.repoBranch && (
+                                        <p className="text-sm text-destructive font-medium">{form.formState.errors.repoBranch.message}</p>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="frontendDir">Frontend directory (optional)</Label>
+                                <Input id="frontendDir" placeholder="e.g., frontend, web, app" {...form.register("frontendDir")} />
+                                <p className="text-xs text-muted-foreground">
+                                    If your frontend code is in a subdirectory, specify the path relative to the repository root. Leave empty if the frontend
+                                    is at the root.
+                                </p>
+                                {form.formState.errors.frontendDir && (
+                                    <p className="text-sm text-destructive font-medium">{form.formState.errors.frontendDir.message}</p>
+                                )}
+                            </div>
+                        </>
+                    )}
                 </CardContent>
             </Card>
 

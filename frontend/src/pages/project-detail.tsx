@@ -240,12 +240,12 @@ export function ProjectDetailPage() {
     }, [project?.autoDeployBranch, project?.repoBranch]);
 
     useEffect(() => {
-        if (!project) {
+        if (!project || !project.installationId) {
             return;
         }
         setBranchLoading(true);
         repositoriesService
-            .getBranches(project.repoName)
+            .getBranches(project.installationId, project.repoFullName)
             .then((branches) => {
                 setBranchOptions(branches.map((branch) => branch.name));
             })
@@ -254,7 +254,7 @@ export function ProjectDetailPage() {
                 // Silently fail - no error toast
             })
             .finally(() => setBranchLoading(false));
-    }, [project?.repoName, showToast]);
+    }, [project?.installationId, project?.repoFullName]);
 
     const handleDeploy = async () => {
         if (!project) return;
@@ -320,7 +320,7 @@ export function ProjectDetailPage() {
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-smooth">
-                        {project.repoName}
+                        {project.repoFullName}
                         <ExternalLink className="h-4 w-4" />
                     </a>
                 </div>
