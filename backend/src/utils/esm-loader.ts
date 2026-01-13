@@ -32,6 +32,7 @@ export async function loadFilecoinPinModules() {
         checkUploadReadiness: uploadModule.checkUploadReadiness,
         executeUpload: uploadModule.executeUpload,
         StorageContext: synapseSdkModule.StorageContext,
+        METADATA_KEYS: synapseSdkModule.METADATA_KEYS,
         SPRegistryService: spRegistryModule.SPRegistryService,
         CID: multiformatsModule.CID,
         pino: pinoModule.default ?? pinoModule,

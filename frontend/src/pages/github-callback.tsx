@@ -14,8 +14,7 @@ export function GitHubCallbackPage() {
   useEffect(() => {
     const path = location.pathname
     const params = new URLSearchParams(location.search)
-    const returnPath = sessionStorage.getItem('github_return_path') || '/dashboard'
-    sessionStorage.removeItem('github_return_path')
+    const returnPath = params.get('returnPath') || '/dashboard'
 
     if (path.includes('/github/success')) {
       setStatus('success')

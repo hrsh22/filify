@@ -256,11 +256,42 @@ openssl rand -base64 32
 openssl rand -hex 32
 ```
 
-**Create GitHub OAuth App**:
+**Convert GitHub App Private Key to base64**:
 
-1. Go to [GitHub OAuth Apps](https://github.com/settings/applications/new)
-2. Set Authorization callback URL to: `http://localhost:3000/api/auth/github/callback`
-3. Copy Client ID and Client Secret
+The `GITHUB_APP_PRIVATE_KEY` must be base64 encoded. Convert your PEM file:
+
+```bash
+# Output to terminal
+cat /path/to/your-private-key.pem | base64 | tr -d '\n' && echo
+
+# Or copy directly to clipboard (macOS)
+cat /path/to/your-private-key.pem | base64 | tr -d '\n' | pbcopy
+```
+
+Copy the output and set it in your `.env`:
+
+```env
+GITHUB_APP_PRIVATE_KEY=LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQo...
+```
+
+**Create GitHub App**:
+
+1. Go to [GitHub Apps Settings](https://github.com/settings/apps/new)
+2. Set the following:
+   - **App name**: Your app name (e.g., `filify-dev`)
+   - **Homepage URL**: `http://localhost:5173`
+   - **Callback URL**: `http://localhost:3000/api/github/callback`
+   - **Setup URL**: `http://localhost:3000/api/github/callback` (check "Redirect on update")
+   - **Webhook**: Disable or set URL to `http://localhost:3000/api/github/webhook`
+   - **Permissions**: 
+     - Repository: Contents (Read), Metadata (Read)
+     - Account: Email addresses (Read)
+3. After creation, note down:
+   - **App ID** → `GITHUB_APP_ID`
+   - **App Name** (slug) → `GITHUB_APP_NAME`
+   - **Client ID** → `GITHUB_APP_CLIENT_ID`
+   - **Client Secret** → `GITHUB_APP_CLIENT_SECRET`
+4. Generate a private key and convert to base64 (see above) → `GITHUB_APP_PRIVATE_KEY`
 
 See `backend/ENV.md` for detailed environment variable documentation.
 

@@ -33,6 +33,8 @@ const envSchema = z.object({
   FILECOIN_PRIVATE_KEY: z.string().regex(/^0x[a-fA-F0-9]{64}$/, 'Must be a valid private key'),
   FILECOIN_RPC_URL: z.string().url().optional(),
   WARM_STORAGE_ADDRESS: z.string().optional(),
+  FILECOIN_DATASET_ID: z.string().transform((val) => parseInt(val, 10)).optional(),
+  FILECOIN_CDN_ENABLED: z.string().default('false').transform((val) => val === 'true'),
 });
 
 export const env = envSchema.parse(process.env);
