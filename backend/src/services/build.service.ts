@@ -173,10 +173,10 @@ class BuildService {
             if (projectType === 'static') {
                 detectedOutputDir = await this.prepareStaticOutput(frontendWorkingDir);
             } else {
-                // Install dependencies
+                // Install dependencies (include devDependencies for build tools like TypeScript, Vite)
                 logs += `Installing dependencies...\n`;
                 logger.info('Installing dependencies', { deploymentId, frontendWorkingDir });
-                const installResult = await this.runCommand('npm install', deploymentId, {
+                const installResult = await this.runCommand('npm install --include=dev', deploymentId, {
                     cwd: frontendWorkingDir,
                 });
                 logs += installResult.stdout + installResult.stderr;
