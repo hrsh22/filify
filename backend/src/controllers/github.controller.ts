@@ -140,16 +140,17 @@ export class GitHubController {
       }
     }
 
-    res.json(
-      validInstallations.map((i) => ({
+    res.json({
+      installations: validInstallations.map((i) => ({
         id: i.id,
         installationId: i.installationId,
         accountLogin: i.accountLogin,
         accountType: i.accountType,
         accountAvatarUrl: i.accountAvatarUrl,
         createdAt: i.createdAt,
-      }))
-    );
+      })),
+      githubAppName: env.GITHUB_APP_NAME,
+    });
   }
 
   async removeInstallation(req: Request, res: Response) {

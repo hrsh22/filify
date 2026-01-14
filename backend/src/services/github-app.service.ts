@@ -111,6 +111,11 @@ class GitHubAppService {
     }));
   }
 
+  async checkRepoAccess(installationId: number, repoFullName: string): Promise<boolean> {
+    const repos = await this.listInstallationRepos(installationId);
+    return repos.some((r) => r.fullName === repoFullName);
+  }
+
   async getRepository(installationId: number, owner: string, repo: string) {
     const token = await this.getInstallationToken(installationId);
     const octokit = this.getOctokitForInstallation(token);

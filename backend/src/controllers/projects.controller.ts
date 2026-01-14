@@ -27,6 +27,7 @@ export class ProjectsController {
       const userProjects = await db.query.projects.findMany({
         where: and(eq(projects.userId, userId), eq(projects.network, network)),
         with: {
+          installation: true,
           deployments: {
             limit: 1,
             orderBy: (deployments: any, { desc }: any) => [desc(deployments.createdAt)],
@@ -34,13 +35,18 @@ export class ProjectsController {
         },
       });
 
+      const validatedProjects = await this.validateProjectsRepoAccess(userProjects);
+
       logger.info('Projects listed successfully', {
         userId,
         network,
-        count: userProjects.length,
+        count: validatedProjects.length,
       });
 
-      res.json(userProjects);
+      res.json({
+        projects: validatedProjects,
+        githubAppName: env.GITHUB_APP_NAME,
+      });
     } catch (error) {
       logger.error('Failed to list projects:', {
         error: error instanceof Error ? error.message : String(error),
@@ -85,7 +91,10 @@ export class ProjectsController {
         userId,
       });
 
-      res.json(project);
+      res.json({
+        ...project,
+        githubAppName: env.GITHUB_APP_NAME,
+      });
     } catch (error) {
       logger.error('Failed to get project:', {
         error: error instanceof Error ? error.message : String(error),
@@ -759,6 +768,212 @@ export class ProjectsController {
         userId,
       });
       res.status(500).json({ error: 'Failed to remove ENS domain' });
+    }
+  }
+
+  private async validateProjectsRepoAccess(projectsList: any[]): Promise<any[]> {
+    const result: any[] = [];
+    const installationReposCache = new Map<number, Set<string>>();
+
+    const disconnectedProjects = projectsList.filter((p) => !p.installation);
+    const connectedProjects = projectsList.filter((p) => p.installation);
+
+    let userInstallations: any[] = [];
+    if (disconnectedProjects.length > 0 && projectsList.length > 0) {
+      const userId = projectsList[0].userId;
+      userInstallations = await db.query.githubInstallations.findMany({
+        where: eq(githubInstallations.userId, userId),
+      });
+    }
+
+    for (const project of connectedProjects) {
+      const installationId = project.installation.installationId;
+
+      if (!installationReposCache.has(installationId)) {
+        try {
+          const repos = await githubAppService.listInstallationRepos(installationId);
+          installationReposCache.set(installationId, new Set(repos.map((r) => r.fullName)));
+        } catch (error: any) {
+          logger.warn('Failed to list installation repos, keeping project as-is', {
+            projectId: project.id,
+            installationId,
+            error: error.message || String(error),
+          });
+          result.push(project);
+          continue;
+        }
+      }
+
+      const accessibleRepos = installationReposCache.get(installationId)!;
+      const hasAccess = accessibleRepos.has(project.repoFullName);
+
+      if (hasAccess) {
+        result.push(project);
+      } else {
+        await db
+          .update(projects)
+          .set({ installationId: null, updatedAt: new Date() })
+          .where(eq(projects.id, project.id));
+
+        logger.info('Repo access revoked, disconnected project', {
+          projectId: project.id,
+          repoFullName: project.repoFullName,
+        });
+
+        result.push({
+          ...project,
+          installationId: null,
+          installation: null,
+        });
+      }
+    }
+
+    for (const project of disconnectedProjects) {
+      let reconnectedInstallation: any = null;
+
+      for (const installation of userInstallations) {
+        if (!installationReposCache.has(installation.installationId)) {
+          try {
+            const repos = await githubAppService.listInstallationRepos(installation.installationId);
+            installationReposCache.set(installation.installationId, new Set(repos.map((r) => r.fullName)));
+          } catch (error: any) {
+            logger.warn('Failed to list installation repos for reconnect check', {
+              installationId: installation.installationId,
+              error: error.message || String(error),
+            });
+            continue;
+          }
+        }
+
+        const accessibleRepos = installationReposCache.get(installation.installationId)!;
+        if (accessibleRepos.has(project.repoFullName)) {
+          reconnectedInstallation = installation;
+          break;
+        }
+      }
+
+      if (reconnectedInstallation) {
+        await db
+          .update(projects)
+          .set({ installationId: reconnectedInstallation.id, updatedAt: new Date() })
+          .where(eq(projects.id, project.id));
+
+        logger.info('Repo access restored, reconnected project', {
+          projectId: project.id,
+          repoFullName: project.repoFullName,
+          installationId: reconnectedInstallation.id,
+        });
+
+        result.push({
+          ...project,
+          installationId: reconnectedInstallation.id,
+          installation: reconnectedInstallation,
+        });
+      } else {
+        result.push(project);
+      }
+    }
+
+    return result;
+  }
+
+  async relinkGithub(req: Request, res: Response) {
+    const { id } = req.params;
+    const { installationId } = req.body;
+    const userId = req.userId!;
+
+    logger.info('Re-linking GitHub installation to project', { projectId: id, installationId, userId });
+
+    try {
+      const project = await db.query.projects.findFirst({
+        where: and(eq(projects.id, id), eq(projects.userId, userId)),
+      });
+
+      if (!project) {
+        return res.status(404).json({ error: 'Project not found' });
+      }
+
+      const installation = await db.query.githubInstallations.findFirst({
+        where: and(
+          eq(githubInstallations.id, installationId),
+          eq(githubInstallations.userId, userId)
+        ),
+      });
+
+      if (!installation) {
+        return res.status(400).json({
+          error: 'InvalidInstallation',
+          message: 'Invalid GitHub installation selected',
+        });
+      }
+
+      const [owner, repo] = project.repoFullName.split('/');
+      try {
+        await githubAppService.getRepository(installation.installationId, owner, repo);
+      } catch {
+        return res.status(400).json({
+          error: 'RepoNotAccessible',
+          message: `The installation "${installation.accountLogin}" does not have access to ${project.repoFullName}`,
+        });
+      }
+
+      if (project.webhookEnabled) {
+        const secretPlain = webhookSecretService.generate();
+        const encryptedSecret = webhookSecretService.encrypt(secretPlain);
+        const webhookUrl = getWebhookUrl();
+
+        try {
+          await githubAppService.registerWebhook(installation.installationId, project.repoFullName, webhookUrl, secretPlain);
+          await db
+            .update(projects)
+            .set({
+              installationId: installation.id,
+              webhookSecret: encryptedSecret,
+              updatedAt: new Date(),
+            })
+            .where(eq(projects.id, id));
+        } catch (webhookError) {
+          logger.warn('Failed to register webhook during relink', {
+            error: webhookError instanceof Error ? webhookError.message : String(webhookError),
+          });
+          await db
+            .update(projects)
+            .set({
+              installationId: installation.id,
+              webhookEnabled: false,
+              webhookSecret: null,
+              updatedAt: new Date(),
+            })
+            .where(eq(projects.id, id));
+        }
+      } else {
+        await db
+          .update(projects)
+          .set({
+            installationId: installation.id,
+            updatedAt: new Date(),
+          })
+          .where(eq(projects.id, id));
+      }
+
+      logger.info('GitHub installation re-linked to project', {
+        projectId: id,
+        installationId: installation.id,
+        accountLogin: installation.accountLogin,
+      });
+
+      return res.json({
+        success: true,
+        installationId: installation.id,
+        accountLogin: installation.accountLogin,
+      });
+    } catch (error) {
+      logger.error('Failed to re-link GitHub:', {
+        error: error instanceof Error ? error.message : String(error),
+        projectId: id,
+        userId,
+      });
+      res.status(500).json({ error: 'Failed to re-link GitHub installation' });
     }
   }
 }

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ExternalLink, Rocket, Globe, GitBranch, FolderOutput, Terminal, AlertCircle, ArrowRight, Trash2 } from "lucide-react";
-import { AxiosError } from "axios";
+import { ExternalLink, Rocket, Globe, FolderOutput, Terminal, AlertCircle, ArrowRight, Trash2, AlertTriangle, Settings } from "lucide-react";
 import type { Project } from "@/types";
 import { deploymentsService } from "@/services/deployments.service";
 import { projectsService } from "@/services/projects.service";
@@ -10,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -24,6 +24,7 @@ import { useToast } from "@/context/toast-context";
 
 interface ProjectCardProps {
     project: Project;
+    githubAppName: string;
     onChange?: () => void;
 }
 
@@ -52,14 +53,21 @@ const ACTIVE_STATUSES = new Set([
     "awaiting_confirmation"
 ]);
 
-export function ProjectCard({ project, onChange }: ProjectCardProps) {
+export function ProjectCard({ project, githubAppName, onChange }: ProjectCardProps) {
     const navigate = useNavigate();
     const { showToast } = useToast();
     const [isDeploying, setIsDeploying] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+    const [showConfigureDialog, setShowConfigureDialog] = useState(false);
+
     const latestDeployment = project.deployments?.[0];
     const projectBusy = Boolean(latestDeployment && ACTIVE_STATUSES.has(latestDeployment.status));
+    const isDisconnected = !project.installationId;
+
+    const githubAppConfigUrl = githubAppName
+        ? `https://github.com/apps/${githubAppName}/installations/select_target`
+        : "https://github.com/settings/installations";
 
     const handleDeploy = async () => {
         try {
@@ -69,7 +77,6 @@ export function ProjectCard({ project, onChange }: ProjectCardProps) {
             navigate(`/deployments/${deploymentId}`);
         } catch (error) {
             console.error("[ProjectCard][deploy]", error);
-            // Silently fail - no error toast
         } finally {
             setIsDeploying(false);
         }
@@ -88,7 +95,6 @@ export function ProjectCard({ project, onChange }: ProjectCardProps) {
             onChange?.();
         } catch (error) {
             console.error("[ProjectCard][delete]", error);
-            // Silently fail - no error toast
         } finally {
             setIsDeleting(false);
         }
@@ -96,7 +102,25 @@ export function ProjectCard({ project, onChange }: ProjectCardProps) {
 
     return (
         <>
-            <Card className="hover-lift transition-smooth">
+            <Card className={`hover-lift transition-smooth ${isDisconnected ? "opacity-75" : ""}`}>
+                {isDisconnected && (
+                    <div className="px-4 pt-4 -mb-2">
+                        <Alert variant="warning" className="flex items-center justify-between py-2">
+                            <div className="flex items-center gap-2">
+                                <AlertTriangle className="h-4 w-4" />
+                                <AlertDescription className="text-xs font-medium">GitHub disconnected. Deployments disabled.</AlertDescription>
+                            </div>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-6 px-2 text-xs bg-transparent border-current hover:bg-black/5"
+                                onClick={() => setShowConfigureDialog(true)}>
+                                <Settings className="h-3 w-3 mr-1" />
+                                Configure
+                            </Button>
+                        </Alert>
+                    </div>
+                )}
                 <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-4">
                         <div className="flex items-center gap-3 flex-1">
@@ -124,21 +148,22 @@ export function ProjectCard({ project, onChange }: ProjectCardProps) {
 
                 <CardContent className="space-y-4">
                     <div className="grid gap-3 sm:grid-cols-2">
-                        {/* ENS Domain or IPFS */}
                         <div className="space-y-2 rounded-lg bg-secondary/50 p-3 border">
                             <div className="flex items-center gap-2 text-muted-foreground">
                                 <Globe className="h-3.5 w-3.5" />
-                                <p className="text-xs font-medium">{project.ensName ? 'ENS Domain' : 'Deployment'}</p>
+                                <p className="text-xs font-medium">{project.ensName ? "ENS Domain" : "Deployment"}</p>
                             </div>
                             <div className="flex items-center justify-between gap-2">
                                 {project.ensName ? (
                                     <>
                                         <p className="text-sm font-semibold text-primary truncate">{project.ensName}</p>
-                                        {latestDeployment?.status === 'success' && latestDeployment.ensTxHash && (
+                                        {latestDeployment?.status === "success" && latestDeployment.ensTxHash && (
                                             <a
-                                                href={project.network === 'sepolia'
-                                                    ? `https://${project.ensName}.s.raffy.eth.limo`
-                                                    : `https://${project.ensName}.limo`}
+                                                href={
+                                                    project.network === "sepolia"
+                                                        ? `https://${project.ensName}.s.raffy.eth.limo`
+                                                        : `https://${project.ensName}.limo`
+                                                }
                                                 target="_blank"
                                                 rel="noreferrer"
                                                 className="inline-flex items-center gap-1 text-xs text-primary hover:underline underline-offset-2 shrink-0">
@@ -149,8 +174,10 @@ export function ProjectCard({ project, onChange }: ProjectCardProps) {
                                     </>
                                 ) : (
                                     <>
-                                        <Badge variant="outline" className="text-xs">IPFS Only</Badge>
-                                        {latestDeployment?.status === 'success' && latestDeployment.ipfsCid && (
+                                        <Badge variant="outline" className="text-xs">
+                                            IPFS Only
+                                        </Badge>
+                                        {latestDeployment?.status === "success" && latestDeployment.ipfsCid && (
                                             <a
                                                 href={`https://${latestDeployment.ipfsCid}.ipfs.dweb.link`}
                                                 target="_blank"
@@ -165,7 +192,6 @@ export function ProjectCard({ project, onChange }: ProjectCardProps) {
                             </div>
                         </div>
 
-                        {/* Latest Deployment */}
                         <div className="space-y-2 rounded-lg bg-secondary/50 p-3 border">
                             <p className="text-xs font-medium text-muted-foreground">Latest Deployment</p>
                             {latestDeployment ? (
@@ -197,7 +223,6 @@ export function ProjectCard({ project, onChange }: ProjectCardProps) {
                             )}
                         </div>
 
-                        {/* Build Command */}
                         {project.buildCommand && (
                             <div className="space-y-2 rounded-lg bg-secondary/50 p-3 border">
                                 <div className="flex items-center gap-2 text-muted-foreground">
@@ -208,7 +233,6 @@ export function ProjectCard({ project, onChange }: ProjectCardProps) {
                             </div>
                         )}
 
-                        {/* Output Directory */}
                         {project.outputDir && (
                             <div className="space-y-2 rounded-lg bg-secondary/50 p-3 border">
                                 <div className="flex items-center gap-2 text-muted-foreground">
@@ -233,7 +257,7 @@ export function ProjectCard({ project, onChange }: ProjectCardProps) {
                 <Separator />
 
                 <CardFooter className="flex gap-2 pt-4">
-                    <Button onClick={handleDeploy} disabled={isDeploying || projectBusy} className="flex-1">
+                    <Button onClick={handleDeploy} disabled={isDeploying || projectBusy || isDisconnected} className="flex-1">
                         <Rocket className="h-4 w-4" />
                         {isDeploying ? "Deploying..." : "Deploy"}
                     </Button>
@@ -242,6 +266,43 @@ export function ProjectCard({ project, onChange }: ProjectCardProps) {
                     </Button>
                 </CardFooter>
             </Card>
+
+            <Dialog open={showConfigureDialog} onOpenChange={setShowConfigureDialog}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Reconnect GitHub Repository</DialogTitle>
+                        <DialogDescription>
+                            The GitHub App no longer has access to <span className="font-semibold text-foreground">{project.repoFullName}</span>.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="py-4 space-y-4">
+                        <div className="rounded-lg bg-secondary/50 p-4 border space-y-3">
+                            <p className="text-sm font-medium">To restore access:</p>
+                            <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
+                                <li>Open Filify Github App installation settings</li>
+                                <li>
+                                    Under "Repository access", add <span className="font-mono text-foreground">{project.repoFullName}</span>
+                                </li>
+                                <li>Save changes and refresh this page</li>
+                            </ol>
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowConfigureDialog(false)}>
+                            Close
+                        </Button>
+                        <Button asChild>
+                            <a href={githubAppConfigUrl} target="_blank" rel="noreferrer">
+                                <Settings className="h-4 w-4 mr-2" />
+                                Open GitHub Settings
+                                <ExternalLink className="h-3 w-3 ml-2" />
+                            </a>
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
                 <AlertDialogContent>

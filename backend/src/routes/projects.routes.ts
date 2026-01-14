@@ -57,6 +57,12 @@ router.delete(
   (req, res) => projectsController.removeEns(req, res)
 );
 
+router.post(
+  '/:id/github/relink',
+  isAuthenticated,
+  (req, res) => projectsController.relinkGithub(req, res)
+);
+
 export default router;
 
 

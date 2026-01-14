@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { AxiosError } from "axios";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Rocket, ExternalLink, Globe, GitBranch, Terminal, FolderOutput, Clock } from "lucide-react";
+import { ArrowLeft, Rocket, ExternalLink, Globe, GitBranch, Terminal, FolderOutput, Clock, AlertTriangle, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -40,7 +40,7 @@ const ACTIVE_STATUSES = new Set([
 export function ProjectDetailPage() {
     const { projectId } = useParams<{ projectId: string }>();
     const navigate = useNavigate();
-    const { project, loading, error, refresh } = useProject(projectId);
+    const { project, githubAppName, loading, error, refresh } = useProject(projectId);
     const { showToast } = useToast();
     const [isDeploying, setIsDeploying] = useState(false);
     const [branchOptions, setBranchOptions] = useState<string[]>([]);
@@ -190,6 +190,10 @@ export function ProjectDetailPage() {
 
     const latestDeployment = project?.deployments?.[0];
     const projectBusy = useMemo(() => Boolean(latestDeployment && ACTIVE_STATUSES.has(latestDeployment.status)), [latestDeployment]);
+    const isDisconnected = !project?.installationId;
+    const githubAppConfigUrl = githubAppName
+        ? `https://github.com/apps/${githubAppName}/installations/select_target`
+        : "https://github.com/settings/installations";
 
     const handleWebhookToggle = async () => {
         if (!project) return;
@@ -324,11 +328,32 @@ export function ProjectDetailPage() {
                         <ExternalLink className="h-4 w-4" />
                     </a>
                 </div>
-                <Button onClick={handleDeploy} disabled={isDeploying || projectBusy} size="lg">
+                <Button onClick={handleDeploy} disabled={isDeploying || projectBusy || isDisconnected} size="lg">
                     <Rocket className="h-4 w-4" />
                     {isDeploying ? "Deploying..." : projectBusy ? "Deployment running" : "Deploy now"}
                 </Button>
             </div>
+
+            {isDisconnected && (
+                <Alert variant="warning">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription className="flex-1">
+                        <span className="font-medium">GitHub disconnected.</span> The GitHub App no longer has access to this repository. Deployments are disabled.
+                    </AlertDescription>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="ml-4 shrink-0"
+                        asChild
+                    >
+                        <a href={githubAppConfigUrl} target="_blank" rel="noreferrer">
+                            <Settings className="h-3 w-3 mr-1" />
+                            Configure
+                            <ExternalLink className="h-3 w-3 ml-1" />
+                        </a>
+                    </Button>
+                </Alert>
+            )}
 
             {projectBusy && (
                 <Alert variant="info">

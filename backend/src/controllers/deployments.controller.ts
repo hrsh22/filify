@@ -10,7 +10,7 @@ import { buildService } from '../services/build.service';
 import { ensService } from '../services/ens.service';
 import { logger } from '../utils/logger';
 import { getDeploymentBuildDir } from '../utils/paths';
-import { deploymentQueue } from '../services/deployment-queue.service';
+import { deploymentQueue, CancellationError } from '../services/deployment-queue.service';
 import { env } from '../config/env';
 import { dynamicImport } from '../utils/dynamic-import';
 import { filecoinUploadService } from '../services/filecoin-upload.service';
@@ -150,8 +150,8 @@ export class DeploymentsController {
                 projectId,
             });
 
-            deploymentQueue.enqueue(projectId, () =>
-                this.runBuildPipeline(deploymentId, project, project.installation.installationId)
+            deploymentQueue.enqueue(projectId, (signal) =>
+                this.runBuildPipeline(deploymentId, project, project.installation.installationId, signal)
             );
 
             logger.info('Deployment created and queued', {
@@ -220,15 +220,17 @@ export class DeploymentsController {
                 .returning();
 
             const killed = buildService.cancelBuild(id);
+            const queueCleared = deploymentQueue.clearQueue(deployment.projectId);
 
             logger.info(
                 `Deployment ${id} cancelled by user ${userId}${killed ? ' (build process terminated)' : ''
-                }`
+                }${queueCleared ? ' (queue cleared)' : ''}`
             );
 
             res.json({
                 status: cancelled[0]?.status ?? 'cancelled',
                 killed,
+                queueCleared,
             });
         } catch (error) {
             logger.error('Failed to cancel deployment:', error);
@@ -858,10 +860,18 @@ export class DeploymentsController {
     async runBuildPipeline(
         deploymentId: string,
         project: any,
-        installationId: number
+        installationId: number,
+        signal?: AbortSignal
     ) {
 
+        const checkCancelled = () => {
+            if (signal?.aborted) {
+                throw new CancellationError();
+            }
+        };
+
         try {
+            checkCancelled();
             logger.info('Build pipeline starting', {
                 deploymentId,
                 projectId: project.id,
@@ -886,6 +896,8 @@ export class DeploymentsController {
                 frontendDir: project.frontendDir ?? undefined,
             });
 
+            checkCancelled();
+
             await db
                 .update(deployments)
                 .set({
@@ -907,6 +919,8 @@ export class DeploymentsController {
                 carFilePath: result.carFilePath,
             });
 
+            checkCancelled();
+
             // Step: Upload to Filecoin
             await db
                 .update(deployments)
@@ -918,7 +932,8 @@ export class DeploymentsController {
             const uploadResult = await filecoinUploadService.uploadCar(
                 result.carFilePath,
                 result.carRootCid,
-                deploymentId
+                deploymentId,
+                { signal }
             );
 
             logger.info('Filecoin upload completed', {

@@ -1,4 +1,4 @@
-import type { BranchSummary, RepositorySummary, GitHubInstallation } from '@/types'
+import type { BranchSummary, RepositorySummary, GitHubInstallationsResponse } from '@/types'
 import { api } from './api'
 
 export const repositoriesService = {
@@ -19,7 +19,7 @@ export const repositoriesService = {
   },
 
   async getInstallations() {
-    const { data } = await api.get<GitHubInstallation[]>('/github/installations')
+    const { data } = await api.get<GitHubInstallationsResponse>('/github/installations')
     return data
   },
 

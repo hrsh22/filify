@@ -4,6 +4,7 @@ import { projectsService } from '@/services/projects.service'
 
 export function useProject(projectId: string | undefined) {
   const [project, setProject] = useState<Project | null>(null)
+  const [githubAppName, setGithubAppName] = useState<string>('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -14,7 +15,9 @@ export function useProject(projectId: string | undefined) {
     try {
       setLoading(true)
       const data = await projectsService.getById(projectId)
-      setProject(data)
+      const { githubAppName: appName, ...projectData } = data
+      setProject(projectData)
+      setGithubAppName(appName)
       setError(null)
     } catch (err) {
       console.error('[useProject]', err)
@@ -30,6 +33,7 @@ export function useProject(projectId: string | undefined) {
 
   return {
     project,
+    githubAppName,
     loading,
     error,
     refresh: fetchProject,

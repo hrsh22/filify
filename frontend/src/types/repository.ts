@@ -25,3 +25,8 @@ export interface GitHubInstallation {
   accountAvatarUrl?: string | null
   createdAt: string
 }
+
+export interface GitHubInstallationsResponse {
+  installations: GitHubInstallation[]
+  githubAppName: string
+}

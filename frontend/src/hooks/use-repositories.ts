@@ -5,18 +5,20 @@ import { repositoriesService } from '@/services/repositories.service'
 export function useRepositories() {
   const [repositories, setRepositories] = useState<RepositorySummary[]>([])
   const [installations, setInstallations] = useState<GitHubInstallation[]>([])
+  const [githubAppName, setGithubAppName] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const fetchRepos = useCallback(async () => {
     try {
       setLoading(true)
-      const [repos, installs] = await Promise.all([
+      const [repos, installationsData] = await Promise.all([
         repositoriesService.getAll(),
         repositoriesService.getInstallations(),
       ])
       setRepositories(repos)
-      setInstallations(installs)
+      setInstallations(installationsData.installations)
+      setGithubAppName(installationsData.githubAppName)
       setError(null)
     } catch (err) {
       console.error('[useRepositories]', err)
@@ -30,7 +32,7 @@ export function useRepositories() {
     void fetchRepos()
   }, [fetchRepos])
 
-  return { repositories, installations, loading, error, refresh: fetchRepos }
+  return { repositories, installations, githubAppName, loading, error, refresh: fetchRepos }
 }
 
 export function useBranches(installationId: string | null, fullName: string | null) {

@@ -11,7 +11,7 @@ import { Separator } from '@/components/ui/separator'
 
 export function DashboardPage() {
   const navigate = useNavigate()
-  const { projects, loading, error, refresh } = useProjects()
+  const { projects, githubAppName, loading, error, refresh } = useProjects()
   useAutoDeployPoller(true)
 
   return (
@@ -59,7 +59,7 @@ export function DashboardPage() {
           <h2 className="text-xl font-semibold">All Projects</h2>
           <div className="grid gap-4">
           {projects.map((project) => (
-            <ProjectCard key={project.id} project={project} onChange={refresh} />
+            <ProjectCard key={project.id} project={project} githubAppName={githubAppName} onChange={refresh} />
           ))}
           </div>
         </div>

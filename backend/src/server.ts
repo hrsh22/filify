@@ -14,6 +14,7 @@ import deploymentsRoutes from './routes/deployments.routes';
 import webhooksRoutes from './routes/webhooks.routes';
 import ensRoutes from './routes/ens.routes';
 import githubRoutes from './routes/github.routes';
+import { cancelStaleDeployments } from './services/startup.service';
 import fs from 'fs';
 import path from 'path';
 
@@ -101,4 +102,10 @@ app.listen(PORT, () => {
     logger.info(`Environment: ${env.NODE_ENV}`);
     logger.info(`Frontend URL: ${env.FRONTEND_URL}`);
     logger.info(`Backend URL: ${env.BACKEND_URL}`);
+
+    cancelStaleDeployments().then((count) => {
+        if (count > 0) {
+            logger.info(`Cancelled ${count} stale deployment(s) from previous session`);
+        }
+    });
 });

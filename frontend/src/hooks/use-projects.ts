@@ -6,6 +6,7 @@ import { useNetwork } from '@/context/network-context'
 export function useProjects() {
   const { network } = useNetwork()
   const [projects, setProjects] = useState<Project[]>([])
+  const [githubAppName, setGithubAppName] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -13,7 +14,8 @@ export function useProjects() {
     try {
       setLoading(true)
       const data = await projectsService.getAll(network)
-      setProjects(data)
+      setProjects(data.projects)
+      setGithubAppName(data.githubAppName)
       setError(null)
     } catch (err) {
       console.error('[useProjects]', err)
@@ -29,6 +31,7 @@ export function useProjects() {
 
   return {
     projects,
+    githubAppName,
     loading,
     error,
     refresh: fetchProjects,

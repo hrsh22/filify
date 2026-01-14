@@ -22,13 +22,22 @@ type UpdateProjectPayload = Partial<Omit<CreateProjectPayload, 'network'>> & {
   autoDeployBranch?: string
 }
 
+type ProjectsListResponse = {
+  projects: Project[]
+  githubAppName: string
+}
+
+type ProjectDetailResponse = Project & {
+  githubAppName: string
+}
+
 export const projectsService = {
   async getAll(network: Network) {
-    const { data } = await api.get<Project[]>(`/projects?network=${network}`)
+    const { data } = await api.get<ProjectsListResponse>(`/projects?network=${network}`)
     return data
   },
   async getById(id: string) {
-    const { data } = await api.get<Project>(`/projects/${id}`)
+    const { data } = await api.get<ProjectDetailResponse>(`/projects/${id}`)
     return data
   },
   async create(payload: CreateProjectPayload) {
@@ -71,7 +80,15 @@ export const projectsService = {
     return data;
   },
   async removeEns(id: string) {
-    const { data } = await api.delete<{ success: boolean }>(`/projects/${id}/ens`);
-    return data;
+    const { data } = await api.delete<{ success: boolean }>(`/projects/${id}/ens`)
+    return data
+  },
+  async relinkGithub(id: string, installationId: string) {
+    const { data } = await api.post<{
+      success: boolean
+      installationId: string
+      accountLogin: string
+    }>(`/projects/${id}/github/relink`, { installationId })
+    return data
   },
 }

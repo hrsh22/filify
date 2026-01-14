@@ -3,6 +3,15 @@ import { env } from '../config/env';
 import { logger } from '../utils/logger';
 import { loadFilecoinPinModules } from '../utils/esm-loader';
 
+const UPLOAD_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+export class FilecoinUploadTimeoutError extends Error {
+    constructor(timeoutMs: number) {
+        super(`Filecoin upload timed out after ${timeoutMs / 1000} seconds`);
+        this.name = 'FilecoinUploadTimeoutError';
+    }
+}
+
 export interface FilecoinUploadResult {
     rootCid: string;
     pieceCid?: string;
@@ -109,26 +118,47 @@ async function createStorageContext(
 }
 
 class FilecoinUploadService {
-    /**
-     * Upload a CAR file to Filecoin.
-     *
-     * @param carFilePath - Path to the CAR file
-     * @param rootCidString - The root CID of the CAR file
-     * @param deploymentId - Deployment ID for logging
-     * @param onProgress - Optional callback for progress updates
-     */
     async uploadCar(
         carFilePath: string,
         rootCidString: string,
         deploymentId: string,
-        onProgress?: ProgressCallback
+        options: { onProgress?: ProgressCallback; signal?: AbortSignal; timeoutMs?: number } = {}
+    ): Promise<FilecoinUploadResult> {
+        const { onProgress, signal, timeoutMs = UPLOAD_TIMEOUT_MS } = options;
+
+        const uploadPromise = this.executeUpload(carFilePath, rootCidString, deploymentId, onProgress, signal);
+
+        const timeoutPromise = new Promise<never>((_, reject) => {
+            const timer = setTimeout(() => {
+                reject(new FilecoinUploadTimeoutError(timeoutMs));
+            }, timeoutMs);
+
+            signal?.addEventListener('abort', () => clearTimeout(timer));
+        });
+
+        return Promise.race([uploadPromise, timeoutPromise]);
+    }
+
+    private async executeUpload(
+        carFilePath: string,
+        rootCidString: string,
+        deploymentId: string,
+        onProgress?: ProgressCallback,
+        signal?: AbortSignal
     ): Promise<FilecoinUploadResult> {
         const updateProgress = (update: UploadProgress) => {
             logger.debug('Upload progress', { deploymentId, ...update });
             onProgress?.(update);
         };
 
+        const checkAborted = () => {
+            if (signal?.aborted) {
+                throw new Error('Upload was cancelled');
+            }
+        };
+
         try {
+            checkAborted();
             updateProgress({ status: 'initializing', progress: 0, message: 'Initializing Filecoin client' });
 
             // Load ESM modules dynamically
@@ -170,6 +200,8 @@ class FilecoinUploadService {
             logger.info('Upload readiness check passed', { deploymentId, status: readinessCheck.status });
             updateProgress({ status: 'checking-readiness', progress: 50, message: 'Readiness check passed' });
 
+            checkAborted();
+
             const { storage: storageContext, providerInfo, dataSetId, withCDN } = await createStorageContext(synapse);
             logger.info('Storage context created', {
                 deploymentId,
@@ -180,6 +212,8 @@ class FilecoinUploadService {
             });
 
             updateProgress({ status: 'uploading', progress: 60, message: 'Starting upload to Filecoin SP' });
+
+            checkAborted();
 
             // Parse the root CID
             const rootCid = modules.CID.parse(rootCidString);

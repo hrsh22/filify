@@ -28,7 +28,7 @@ export function GitHubInstallationsManager() {
   const fetchInstallations = async () => {
     try {
       const data = await repositoriesService.getInstallations()
-      setInstallations(data)
+      setInstallations(data.installations)
     } catch (error) {
       console.error('[GitHubInstallationsManager] Failed to fetch installations', error)
       showToast('Failed to load GitHub installations', 'error')
