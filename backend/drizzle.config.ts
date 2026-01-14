@@ -12,6 +12,6 @@ export default {
     dialect: 'postgresql',
     dbCredentials: {
         url: databaseUrl,
-        ssl: isProduction ? 'require' : false,
+        ssl: isProduction ? { rejectUnauthorized: false } : false,
     },
 } satisfies Config;
