@@ -22,6 +22,7 @@ const PgStore = pgSession(session);
 
 const pool = new Pool({
     connectionString: env.DATABASE_URL,
+    ssl: env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
 
 const backendUrl = new URL(env.BACKEND_URL);

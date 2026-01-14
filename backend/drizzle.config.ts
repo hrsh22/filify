@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const databaseUrl = process.env.DATABASE_URL || 'postgres://localhost:5432/filify_development';
+const isProduction = process.env.NODE_ENV === 'production';
 
 export default {
     schema: './src/db/schema.ts',
@@ -11,5 +12,6 @@ export default {
     dialect: 'postgresql',
     dbCredentials: {
         url: databaseUrl,
+        ssl: isProduction ? 'require' : false,
     },
 } satisfies Config;
