@@ -5,7 +5,7 @@ import { isAuthenticated } from '../middleware/auth';
 import { validateRequest } from '../middleware/validateRequest';
 import { createProjectSchema, updateProjectSchema, webhookToggleSchema, emptyBodySchema } from '../utils/validators';
 
-const router = Router();
+const router: Router = Router();
 
 router.get('/', isAuthenticated, (req, res) => projectsController.list(req, res));
 router.post(

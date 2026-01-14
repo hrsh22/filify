@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { repositoriesController } from '../controllers/repositories.controller';
 import { isAuthenticated } from '../middleware/auth';
 
-const router = Router();
+const router: Router = Router();
 
 router.get('/', isAuthenticated, (req, res) => repositoriesController.list(req, res));
 router.get('/:installationId/:owner/:repo/branches', isAuthenticated, (req, res) =>

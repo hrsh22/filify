@@ -1,54 +1,12 @@
 {
-  "version": "5",
-  "dialect": "sqlite",
+  "version": "7",
+  "dialect": "postgresql",
   "entries": [
     {
       "idx": 0,
-      "version": "5",
-      "when": 1763613088536,
-      "tag": "0000_wooden_kree",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "5",
-      "when": 1763766034706,
-      "tag": "0001_ambitious_mister_sinister",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "5",
-      "when": 1763780000000,
-      "tag": "0002_wallet_owned_ens",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "5",
-      "when": 1763798400000,
-      "tag": "0003_backend_car",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "5",
-      "when": 1763802000000,
-      "tag": "0004_backend_filecoin_upload",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "6",
-      "when": 1763878921277,
-      "tag": "0005_silly_the_anarchist",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "6",
-      "when": 1767461112073,
-      "tag": "0007_mean_namorita",
+      "version": "7",
+      "when": 1768384709090,
+      "tag": "0000_numerous_retro_girl",
       "breakpoints": true
     }
   ]

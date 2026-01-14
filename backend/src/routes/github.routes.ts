@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { githubController } from '../controllers/github.controller';
 import { isAuthenticated } from '../middleware/auth';
 
-const router = Router();
+const router: Router = Router();
 
 router.get('/install', isAuthenticated, (req, res) => githubController.getInstallUrl(req, res));
 router.get('/callback', (req, res) => githubController.handleCallback(req, res));

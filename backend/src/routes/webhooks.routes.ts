@@ -1,7 +1,7 @@
 import { Router, raw } from 'express';
 import { webhooksController } from '../controllers/webhooks.controller';
 
-const router = Router();
+const router: Router = Router();
 
 router.post('/github', raw({ type: '*/*' }), (req, res) =>
     webhooksController.handleGithubWebhook(req, res)

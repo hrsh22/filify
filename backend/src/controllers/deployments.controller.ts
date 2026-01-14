@@ -151,7 +151,7 @@ export class DeploymentsController {
             });
 
             deploymentQueue.enqueue(projectId, (signal) =>
-                this.runBuildPipeline(deploymentId, project, project.installation.installationId, signal)
+                this.runBuildPipeline(deploymentId, project, project.installation!.installationId, signal)
             );
 
             logger.info('Deployment created and queued', {
@@ -285,10 +285,10 @@ export class DeploymentsController {
             }
 
             const payload = await ensService.prepareContenthashTx(
-                deployment.project.ensName,
-                deployment.project.ensOwnerAddress,
+                deployment.project.ensName!,
+                deployment.project.ensOwnerAddress!,
                 ipfsCid,
-                deployment.project.ethereumRpcUrl
+                deployment.project.ethereumRpcUrl!
             );
 
             // Only update status if not already successful (to avoid triggering auto-deploy poller)
@@ -374,10 +374,10 @@ export class DeploymentsController {
                 .where(eq(deployments.id, id));
 
             const result = await ensService.waitForTransaction({
-                ensName: deployment.project.ensName,
+                ensName: deployment.project.ensName!,
                 txHash,
-                expectedCid: deployment.ipfsCid,
-                rpcUrl: deployment.project.ethereumRpcUrl,
+                expectedCid: deployment.ipfsCid!,
+                rpcUrl: deployment.project.ethereumRpcUrl!,
             });
 
             await db
@@ -697,13 +697,13 @@ export class DeploymentsController {
             logger.info('Starting artifact download', {
                 deploymentId: id,
                 sourceDir,
-                projectName: deployment.project.repoName,
+                projectName: deployment.project.name,
             });
 
             res.setHeader('Content-Type', 'application/zip');
             res.setHeader(
                 'Content-Disposition',
-                `attachment; filename="${deployment.project.repoName || 'build'}-${id}.zip"`
+                `attachment; filename="${deployment.project.name || 'build'}-${id}.zip"`
             );
 
             const archive = archiver('zip', { zlib: { level: 9 } });
@@ -794,7 +794,7 @@ export class DeploymentsController {
             }
 
             const stats = await fs.stat(carPath);
-            const dispositionName = `${deployment.project.repoName || 'build'}-${id}.car`;
+            const dispositionName = `${deployment.project.name || 'build'}-${id}.car`;
 
             res.setHeader('Content-Type', 'application/vnd.ipld.car');
             res.setHeader('Content-Length', stats.size.toString());

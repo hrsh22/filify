@@ -11,8 +11,7 @@ const envSchema = z.object({
 
   SESSION_SECRET: z.string().min(32),
 
-  DATABASE_URL: z.string().default('sqlite:./data/dev.db'),
-  DATABASE_AUTH_TOKEN: z.string().optional(),
+  DATABASE_URL: z.string().url().default('postgres://localhost:5432/filify_development'),
 
   ENCRYPTION_KEY: z.string().length(64),
   GITHUB_WEBHOOK_SECRET_ENCRYPTION_KEY: z.string().length(64),

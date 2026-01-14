@@ -2,7 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import session from 'express-session';
-import SQLiteStore from 'connect-sqlite3';
+import pgSession from 'connect-pg-simple';
+import { Pool } from 'pg';
 import { env } from './config/env';
 import { errorHandler } from './middleware/errorHandler';
 import { requestLogger } from './middleware/requestLogger';
@@ -15,11 +16,13 @@ import webhooksRoutes from './routes/webhooks.routes';
 import ensRoutes from './routes/ens.routes';
 import githubRoutes from './routes/github.routes';
 import { cancelStaleDeployments } from './services/startup.service';
-import fs from 'fs';
-import path from 'path';
 
 const app = express();
-const SessionStore = SQLiteStore(session) as any;
+const PgStore = pgSession(session);
+
+const pool = new Pool({
+    connectionString: env.DATABASE_URL,
+});
 
 const backendUrl = new URL(env.BACKEND_URL);
 const frontendUrl = new URL(env.FRONTEND_URL);
@@ -28,11 +31,6 @@ const cookieSecure = backendUrl.protocol === 'https:';
 const cookieSameSite = !sameOrigin && cookieSecure ? 'none' : 'lax';
 
 app.set('trust proxy', true);
-
-const dataDir = path.join(process.cwd(), 'data');
-if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-}
 
 app.use(helmet());
 app.use(
@@ -50,20 +48,12 @@ app.use('/api/webhooks', webhooksRoutes);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-const isTurso = env.DATABASE_URL.startsWith('libsql://') || env.DATABASE_URL.startsWith('https://');
-const sessionDbPath = isTurso ? './data/sessions.db' : env.DATABASE_URL.replace('sqlite:', '');
-const sessionDbDir = path.dirname(sessionDbPath);
-const sessionDbFile = path.basename(sessionDbPath);
-
-if (!fs.existsSync(sessionDbDir)) {
-    fs.mkdirSync(sessionDbDir, { recursive: true });
-}
-
 app.use(
     session({
-        store: new SessionStore({
-            db: sessionDbFile,
-            dir: sessionDbDir || './data',
+        store: new PgStore({
+            pool,
+            tableName: 'session',
+            createTableIfMissing: true,
         }),
         secret: env.SESSION_SECRET,
         resave: false,

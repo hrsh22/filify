@@ -9,7 +9,7 @@ import {
     uploadFailureSchema,
 } from '../utils/validators';
 
-const router = Router();
+const router: Router = Router();
 
 router.post(
     '/',

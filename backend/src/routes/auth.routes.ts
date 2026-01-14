@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authController } from '../controllers/auth.controller';
 
-const router = Router();
+const router: Router = Router();
 
 router.post('/nonce', (req, res) => authController.getNonce(req, res));
 router.post('/verify', (req, res) => authController.verify(req, res));

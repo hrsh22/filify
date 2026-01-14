@@ -1,24 +1,24 @@
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+import { pgTable, text, integer, boolean, timestamp } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
-export const users = sqliteTable('users', {
+export const users = pgTable('users', {
   walletAddress: text('wallet_address').primaryKey(),
   ensName: text('ens_name'),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const githubInstallations = sqliteTable('github_installations', {
+export const githubInstallations = pgTable('github_installations', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().references(() => users.walletAddress, { onDelete: 'cascade' }),
   installationId: integer('installation_id').notNull().unique(),
   accountLogin: text('account_login').notNull(),
   accountType: text('account_type').notNull(),
   accountAvatarUrl: text('account_avatar_url'),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const projects = sqliteTable('projects', {
+export const projects = pgTable('projects', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().references(() => users.walletAddress, { onDelete: 'cascade' }),
   installationId: text('installation_id').references(() => githubInstallations.id, { onDelete: 'set null' }),
@@ -34,13 +34,13 @@ export const projects = sqliteTable('projects', {
   buildCommand: text('build_command'),
   outputDir: text('output_dir'),
   frontendDir: text('frontend_dir'),
-  webhookEnabled: integer('webhook_enabled', { mode: 'boolean' }).notNull().default(false),
+  webhookEnabled: boolean('webhook_enabled').notNull().default(false),
   webhookSecret: text('webhook_secret'),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const deployments = sqliteTable('deployments', {
+export const deployments = pgTable('deployments', {
   id: text('id').primaryKey(),
   projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
   status: text('status').notNull(),
@@ -54,8 +54,8 @@ export const deployments = sqliteTable('deployments', {
   buildArtifactsPath: text('build_artifacts_path'),
   carRootCid: text('car_root_cid'),
   carFilePath: text('car_file_path'),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-  completedAt: integer('completed_at', { mode: 'timestamp' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
 });
 
 export const usersRelations = relations(users, ({ many }) => ({
